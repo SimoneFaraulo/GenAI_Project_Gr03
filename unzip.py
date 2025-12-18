@@ -24,7 +24,7 @@ def scompatta_tutto(percorso_cartella):
 
 
 if __name__ == "__main__":
-    cartella_target = r"."
+    cartella_target = r"./dataset"
 
     scompatta_tutto(cartella_target)
     print("\nOperazione terminata.")
