@@ -20,6 +20,7 @@ class CelebADataset(Dataset):
         
         # Percorsi basati sulla struttura fornita
         self.img_dir = os.path.join(folder, 'img_align_celeba')
+        print(self.img_dir)
         self.attr_path = os.path.join(folder, 'list_attr_celeba.txt')
         
         # Indici degli attributi richiesti dal PDF:

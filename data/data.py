@@ -1,13 +1,8 @@
-from config.config import data_base, BATCH_SIZE
+from config.config import BATCH_SIZE, DATA_DIRECTORY
 from .image_dataset import CelebADataset
 import torch
 from torchvision.transforms import v2 as tforms
 from torch.utils.data import DataLoader
-import os
-
-# Imposta la cartella dove hai scompattato i file (es. ./dataset)
-# Assicurati che config.py o la variabile d'ambiente puntino alla cartella corretta
-DATASET_FOLDER = data_base('dataset') 
 
 IMAGE_SIZE = 64  # Risoluzione richiesta dal progetto (64x64)
 
@@ -19,15 +14,13 @@ transform = tforms.Compose([
     tforms.CenterCrop(178), 
     tforms.Resize((IMAGE_SIZE, IMAGE_SIZE), antialias=True),
     tforms.ToDtype(torch.float32, scale=True)
-    # Rimosso RandomHorizontalFlip e ColorJitter per ora per mantenere coerenza con i label,
-    # ma puoi aggiungerli se gestisci correttamente i flip (es. non flippare attributi asimmetrici se ce ne fossero)
 ])
 
 # Istanzia il nuovo dataset compatibile con la struttura locale
 try:
-    data_set = CelebADataset(DATASET_FOLDER, transform=transform)
+    data_set = CelebADataset(DATA_DIRECTORY, transform=transform)
     data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True)
-    print('Dataset CelebA caricato da:', DATASET_FOLDER)
+    print('Dataset CelebA caricato da:', DATA_DIRECTORY)
     print('Campioni trovati:', len(data_set))
 except Exception as e:
     print(f"Errore nel caricamento del dataset: {e}")
