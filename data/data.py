@@ -1,40 +1,39 @@
-from config import data_base, BATCH_SIZE
-from image_dataset import ImageDataset
+from config.config import data_base, BATCH_SIZE
+from .image_dataset import CelebADataset
 import torch
-import torchvision
 from torchvision.transforms import v2 as tforms
 from torch.utils.data import DataLoader
+import os
 
-DATASET_FOLDER=data_base('UNSPLASH')
+# Imposta la cartella dove hai scompattato i file (es. ./dataset)
+# Assicurati che config.py o la variabile d'ambiente puntino alla cartella corretta
+DATASET_FOLDER = data_base('dataset') 
 
-IMAGE_SIZE=256 # Height and width of images
+IMAGE_SIZE = 64  # Risoluzione richiesta dal progetto (64x64)
 
-# Data conversion + Minimal data augmentation for images
-transform=tforms.Compose([
+# Trasformazioni per CelebA
+# 1. CenterCrop(178): Ritaglia il quadrato centrale dove si trova il volto (standard per CelebA)
+# 2. Resize(IMAGE_SIZE): Ridimensiona a 64x64
+transform = tforms.Compose([
     tforms.ToImage(),
-    tforms.RandomResizedCrop(size=(IMAGE_SIZE, IMAGE_SIZE), ratio=(1,1),
-                scale=(0.7,1.0), antialias=True),
-    tforms.RandomHorizontalFlip(),
-    tforms.ColorJitter(brightness=0.2, contrast=0.1),
+    tforms.CenterCrop(178), 
+    tforms.Resize((IMAGE_SIZE, IMAGE_SIZE), antialias=True),
     tforms.ToDtype(torch.float32, scale=True)
-    ])
+    # Rimosso RandomHorizontalFlip e ColorJitter per ora per mantenere coerenza con i label,
+    # ma puoi aggiungerli se gestisci correttamente i flip (es. non flippare attributi asimmetrici se ce ne fossero)
+])
 
-data_set=ImageDataset(DATASET_FOLDER, transform=transform, caching=True)
-data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True)
-
+# Istanzia il nuovo dataset compatibile con la struttura locale
+try:
+    data_set = CelebADataset(DATASET_FOLDER, transform=transform)
+    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True)
+    print('Dataset CelebA caricato da:', DATASET_FOLDER)
+    print('Campioni trovati:', len(data_set))
+except Exception as e:
+    print(f"Errore nel caricamento del dataset: {e}")
+    data_set = []
+    data_loader = None
 
 def grayscale(img_tensor, output_channels=1):
-    '''Assume that the input is a tensor (3xHxW) representing
-       a WxH color image, or (Nx3xHxW) for a batch of N color images;
-       The returned value has the same format as the input, but with
-       a possibly reduced number of output channels.
-
-       img_tensor      the input image/batch or images
-       output_channels number of desired output channels (1 or 3);
-                       default: 1                     
-    '''
+    '''Funzione di utilità per convertire in scala di grigi se necessario'''
     return tforms.functional.rgb_to_grayscale(img_tensor, output_channels)
-    
-
-print('Dataset loaded from:', DATASET_FOLDER)
-print('Dataset samples:', len(data_set))

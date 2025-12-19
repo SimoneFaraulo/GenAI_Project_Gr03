@@ -60,4 +60,9 @@ def save_images(filename, *img_rows, figsize=None):
     plt.savefig(filename, bbox_inches='tight', dpi=300)
     plt.close()
 
-
+def parameter_count(model):
+    "Returns the number of parameters in a model"
+    count=0
+    for p in model.parameters():
+        count+=p.numel()
+    return count
