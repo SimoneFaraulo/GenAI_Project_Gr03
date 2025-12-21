@@ -1,4 +1,4 @@
-from config.config import BATCH_SIZE, DATA_DIRECTORY
+from config.config import BATCH_SIZE, DATA_DIRECTORY, NUM_WORKERS
 from .image_dataset import CelebADataset
 import torch
 from torchvision.transforms import v2 as tforms
@@ -19,7 +19,7 @@ transform = tforms.Compose([
 # Istanzia il nuovo dataset compatibile con la struttura locale
 try:
     data_set = CelebADataset(DATA_DIRECTORY, transform=transform)
-    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True)
+    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
     print('Dataset CelebA caricato da:', DATA_DIRECTORY)
     print('Campioni trovati:', len(data_set))
 except Exception as e:

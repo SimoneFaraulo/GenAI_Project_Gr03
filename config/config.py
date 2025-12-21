@@ -8,13 +8,14 @@ if not CHECKPOINT_DIRECTORY:
     CHECKPOINT_DIRECTORY = os.path.join(HOME_DIRECTORY, "temp", "CHECKPOINTS")
 
 DATA_DIRECTORY = os.getenv("DATA_DIRECTORY", "./dataset")
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "64"))
 EPOCHS = int(os.getenv("EPOCHS", "2"))
-MODEL_TYPE = os.getenv('MODEL_TYPE', 'vae').lower()
+MODEL_TYPE = os.getenv('MODEL_TYPE', 'diff').lower()
 EXP_NUM = os.getenv("EXP_NUM", "1")
 CKP_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", '300'))
 FORCE_CKP = int(os.getenv("FORCE_CKP", '0'))
 PROGRESS_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", '30'))
+NUM_WORKERS = int(os.getenv("NUM_WORKERS", "8"))
 
 # Comuni a tutti
 IMG_CHANNELS = 3          # RGB
