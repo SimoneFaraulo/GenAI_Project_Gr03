@@ -1,4 +1,4 @@
-from config.config import BATCH_SIZE, DATA_DIRECTORY
+from config.config import BATCH_SIZE, DATA_DIRECTORY, NUM_WORKERS
 from .image_dataset import CelebADataset
 import torch
 from torchvision.transforms import v2 as tforms
@@ -19,7 +19,7 @@ transform = tforms.Compose([
 # Istanzia il nuovo dataset compatibile con la struttura locale
 try:
     data_set = CelebADataset(DATA_DIRECTORY, transform=transform)
-    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True)
+    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=NUM_WORKERS)
     print('Dataset CelebA caricato da:', DATA_DIRECTORY)
     print('Campioni trovati:', len(data_set))
 except Exception as e:
@@ -28,5 +28,5 @@ except Exception as e:
     data_loader = None
 
 def grayscale(img_tensor, output_channels=1):
-    '''Funzione di utilità per convertire in scala di grigi se necessario'''
+    '''Funzione di utilita' per convertire in scala di grigi se necessario'''
     return tforms.functional.rgb_to_grayscale(img_tensor, output_channels)

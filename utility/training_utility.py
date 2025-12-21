@@ -7,7 +7,7 @@ from .show_utils import save_images
 def save_training_checkpoint(cpm, model, optimizer, epoch_count, force=False, interval=300):
     """
     Gestisce il salvataggio del checkpoint tramite CheckpointManager.
-    Salva solo se è passato 'interval' tempo o se 'force' è True.
+    Salva solo se e' passato 'interval' tempo o se 'force' e' True.
     """
     last_save = cpm.get_last_save_time()
     dt = time.time() - last_save
@@ -34,21 +34,27 @@ def save_snapshot(model, dataset, folder, epoch_count, device, num_samples=8):
     indices = np.random.randint(0, len(dataset), num_samples)
     samples = [dataset[i] for i in indices]
     
-    # Preparazione batch
+    # Preparazione batch (immagini reali e attributi)
     real_imgs = torch.stack([s[0] for s in samples]).to(device)
     attrs = torch.stack([s[1] for s in samples]).to(device)
     
     with torch.no_grad():
-        # Assumiamo che il modello restituisca la ricostruzione come primo output
-        # Se in futuro usi GAN, dovrai adattare questa chiamata o renderla generica
-        output = model(real_imgs, attrs)
-        
-        # Gestione output multipli (es. VAE ritorna (recon, mu, logvar))
-        if isinstance(output, tuple):
-            recon_imgs = output[0]
+        # CONTROLLO TIPO DI MODELLO
+        # Se il nome della classe contiene "Diffusion", usiamo il metodo sample()
+        if "Diffusion" in model.__class__.__name__:
+            # Passiamo 'cond=attrs' per generare facce con gli stessi attributi delle originali
+            recon_imgs = model.sample(num_samples=num_samples, device=device, cond=attrs)
         else:
-            recon_imgs = output
+            # Comportamento standard per VAE (forward)
+            output = model(real_imgs, attrs)
+            
+            # Gestione output multipli (es. VAE ritorna (recon, mu, logvar))
+            if isinstance(output, tuple):
+                recon_imgs = output[0]
+            else:
+                recon_imgs = output
         
+        # Salvataggio immagine confronto
         save_images(filepath, real_imgs.cpu(), recon_imgs.cpu(), figsize=(10, 5))
         
     print(f" -> Snapshot saved: {filepath}")

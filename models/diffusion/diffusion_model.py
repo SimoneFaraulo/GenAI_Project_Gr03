@@ -196,9 +196,7 @@ class ConditionalDiffusion(nn.Module):
             pred_noise = self(x, t_batch, cond)
 
             # Parametri per il passo inverso
-            alpha = self.noise_schedule.alpha[t_idx]
             beta = self.noise_schedule.beta[t_idx]
-            one_minus_alpha = self.noise_schedule.one_minus_alpha[t_idx]
             sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[t_idx]
 
             if t_idx > 0:
