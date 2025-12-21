@@ -1,4 +1,4 @@
-import torch
+﻿import torch
 from torch import nn
 import math
 from config.config import *
@@ -7,14 +7,17 @@ from config.config import *
 class NoiseSchedule:
     def __init__(self, schedule_len=NOISE_SCHEDULE_L, s=0.008, device=DEVICE):
         self.schedule_len = schedule_len
-        # Calcolo schedule coseno
         t = torch.linspace(0.0, schedule_len, schedule_len + 1, device=device) / schedule_len
         a = torch.cos((t + s) / (1 + s) * torch.pi / 2) ** 2
         a = a / a[0]
         self.beta = (1 - a[1:] / a[:-1]).clip(0.0, 0.99)
         self.alpha = torch.cumprod(1.0 - self.beta, dim=0)
+        self.one_minus_beta = 1 - self.beta
+        self.one_minus_alpha = 1 - self.alpha
         self.sqrt_alpha = torch.sqrt(self.alpha)
-        self.sqrt_1_alpha = torch.sqrt(1 - self.alpha)
+        self.sqrt_beta = torch.sqrt(self.beta)
+        self.sqrt_1_alpha = torch.sqrt(self.one_minus_alpha)
+        self.sqrt_1_beta = torch.sqrt(self.one_minus_beta)
 
 
 class TimeEncoding:
@@ -40,14 +43,12 @@ class TimeEncoding:
 
 
 class UNetBlock(nn.Module):
-    # --- LOGICA ORIGINALE PRESERVATA (Vincolo 1) ---
     def __init__(self, size, outer_features, inner_features, cond_features, inner_block=None):
         super().__init__()
         self.size = size
         self.outer_features = outer_features
         self.inner_features = inner_features
         self.cond_features = cond_features
-        # Nota: TIME_ENCODING_SIZE importato da config
         self.encoder = self.build_encoder(outer_features + cond_features, inner_features)
         self.decoder = self.build_decoder(inner_features + cond_features + TIME_ENCODING_SIZE, outer_features)
         self.combiner = self.build_combiner(2 * outer_features, outer_features)
@@ -82,7 +83,6 @@ class UNetBlock(nn.Module):
             nn.Conv2d(from_features, from_features, 3, padding='same', bias=False),
             nn.BatchNorm2d(from_features),
             nn.ReLU(),
-            # Stride 2 dimezza la dimensione (es. 64 -> 32)
             nn.Conv2d(from_features, to_features, 4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(to_features),
             nn.ReLU()
@@ -93,7 +93,6 @@ class UNetBlock(nn.Module):
             nn.Conv2d(from_features, from_features, 3, padding='same', bias=False),
             nn.BatchNorm2d(from_features),
             nn.ReLU(),
-            # Transpose Stride 2 raddoppia (es. 32 -> 64)
             nn.ConvTranspose2d(from_features, to_features, 4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(to_features),
             nn.ReLU()
@@ -151,65 +150,108 @@ class ConditionalDiffusion(nn.Module):
         return UNetBlock(size, feat_list[0], feat_list[1], ATTR_DIM, inner_block)
 
     # --- METODI AGGIUNTIVI PER COMPATIBILITÀ TRAINER ---
+    def compute_loss(self, x0, cond):
+        """
+        Calcola la loss replicando esattamente la logica di training con
+        Classifier-Free Guidance (dropout del condizionamento).
+        """
+        batch_size = x0.shape[0]
 
-    def compute_loss(self, x, cond):
-        """Calcola la loss MSE tra rumore predetto e rumore reale"""
-        batch_size = x.shape[0]
+        # Logica "MIA IMPLEMENTAZIONE": Remove conditioning with probability P=0.2
+        P = 0.2
+        # Creiamo una copia per non modificare il tensore originale nel batch
+        cond = cond.clone()
+        u = torch.rand((batch_size,), device=x0.device)
+        # Azzeriamo il condizionamento dove u < P
+        cond[u < P, :] = 0.0
 
-        # 1. Campiona t uniformemente
-        t = torch.randint(0, NOISE_SCHEDULE_L, (batch_size,), device=x.device)
+        # 2. Scelta casuale dei timestep (uno per ogni sample nel minibatch)
+        t = torch.randint(0, self.noise_schedule.schedule_len, (batch_size,), device=x0.device)
 
-        # 2. Genera rumore gaussiano
-        eps = torch.randn_like(x)
+        # 3. Generazione del rumore casuale (eps)
+        eps = torch.randn_like(x0)
 
-        # 3. Ottieni coefficienti per t
-        # Reshape per broadcasting corretto: [B, 1, 1, 1]
-        sqrt_alpha_t = self.noise_schedule.sqrt_alpha[t].view(-1, 1, 1, 1)
-        sqrt_1_alpha_t = self.noise_schedule.sqrt_1_alpha[t].view(-1, 1, 1, 1)
+        # 4. Calcolo dell'immagine latente (zt)
+        # Recuperiamo i coefficienti dallo schedule e facciamo reshape per il broadcasting [B, 1, 1, 1]
+        sqrt_alpha = self.noise_schedule.sqrt_alpha[t].view(-1, 1, 1, 1)
+        sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[t].view(-1, 1, 1, 1)
 
-        # 4. Forward diffusion: z_t = sqrt_alpha * x + sqrt_1_alpha * eps
-        z_t = sqrt_alpha_t * x + sqrt_1_alpha_t * eps
+        # Formula esatta: zt = sqrt_alpha * x + sqrt_1_alpha * eps
+        zt = sqrt_alpha * x0 + sqrt_1_alpha * eps
 
-        # 5. Predizione del modello
-        g = self(z_t, t, cond)
+        # 5. Output della rete (stima di eps)
+        # g = model(zt, t, cond)
+        g = self(zt, t, cond)
 
-        # 6. Loss
+        # 6. Calcolo Loss (MSE tra rumore predetto e rumore reale)
         loss = nn.functional.mse_loss(g, eps)
 
         return loss
 
     @torch.no_grad()
-    def sample(self, num_samples, device, cond=None):
-        """Genera immagini partendo da rumore puro (Reverse Diffusion)"""
+    def sample(self, num_samples, device, cond=None, lam=LAMBDA):
+        """
+        Genera immagini usando il sampling DDPM con Classifier-Free Guidance.
+        Basato sul codice 'FUNZIONANTE MIO' dell'utente.
+
+        Args:
+            num_samples: numero di immagini da generare
+            device: device su cui eseguire
+            cond: tensore degli attributi (se None, viene generato casualmente)
+            lam: scala della guida (guidance scale).
+                 lam=1.0 -> sampling condizionato standard.
+                 lam>1.0 -> forza maggiormente gli attributi.
+        """
+        # 1. Setup Condizioni
         if cond is None:
-            # Condizione random se non fornita (per test)
+            # Genera attributi random se non forniti
             cond = torch.randint(0, 2, (num_samples, ATTR_DIM)).float().to(device)
 
-        # Partiamo da rumore puro
-        x = torch.randn(num_samples, self.channels, self.img_size, self.img_size, device=device)
+        # cond0 serve per la guida "senza etichetta" (tutto zeri come nel tuo codice)
+        cond0 = torch.zeros_like(cond).to(device)
 
-        # Iterazione inversa da T-1 a 0
-        for t_idx in range(NOISE_SCHEDULE_L - 1, -1, -1):
-            t_batch = torch.full((num_samples,), t_idx, device=device, dtype=torch.long)
+        # 2. Setup Iniziale
+        n = num_samples
+        # Usa self.img_size e self.channels definiti nella classe
+        z = torch.randn(n, self.channels, self.img_size, self.img_size, device=device)
 
-            # Predizione rumore
-            pred_noise = self(x, t_batch, cond)
+        # 3. Imposta Eval Mode (CRUCIALE come hai notato)
+        # Salviamo lo stato precedente per ripristinarlo alla fine
+        was_training = self.training
+        self.eval()
 
-            # Parametri per il passo inverso
-            beta = self.noise_schedule.beta[t_idx]
-            sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[t_idx]
+        # 4. Loop di Reverse Diffusion
+        for kt in reversed(range(self.noise_schedule.schedule_len)):
+            # Preparazione batch temporale
+            t = torch.tensor(kt, device=device).view(1).expand(n)
 
-            if t_idx > 0:
-                z = torch.randn_like(x)
+            # Recupero parametri dallo schedule (usando self.noise_schedule)
+            beta = self.noise_schedule.beta[kt]
+            sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[kt]  # sqrt(1 - alpha_cumprod)
+            sqrt_1_beta = self.noise_schedule.sqrt_1_beta[kt]  # sqrt(1 - beta) aka sqrt(alpha)
+            sqrt_beta = self.noise_schedule.sqrt_beta[kt]  # sigma
+
+            # Stima dell'errore (noise prediction) con CFG
+            # Nota: self(x, t, c) chiama il forward della classe
+            g1 = self(z, t, cond)  # Predizione condizionata
+            g0 = self(z, t, cond0)  # Predizione incondizionata
+
+            # Combinazione (Guidance)
+            g = lam * g1 + (1 - lam) * g0
+
+            # Calcolo della media (mu)
+            # Formula: mu = 1/sqrt(alpha) * (x - beta/sqrt(1-alpha_cumprod) * eps)
+            # Nel tuo codice: sqrt_1_beta corrisponde a sqrt(alpha_t)
+            mu = (z - beta / sqrt_1_alpha * g) / sqrt_1_beta
+
+            # Generazione e aggiunta del rumore
+            if kt > 0:
+                eps = torch.randn_like(z)
+                z = mu + sqrt_beta * eps
             else:
-                z = torch.zeros_like(x)
+                z = mu
 
-            # Formula di update standard DDPM
-            # x_{t-1} = 1/sqrt(1-beta) * (x_t - beta/sqrt(1-alpha) * pred_noise) + sigma * z
-            coeff1 = 1 / torch.sqrt(1 - beta)
-            coeff2 = beta / sqrt_1_alpha
-            sigma = torch.sqrt(beta)
+        if was_training:
+            self.train()
 
-            x = coeff1 * (x - coeff2 * pred_noise) + sigma * z
-
-        return x
+        return z

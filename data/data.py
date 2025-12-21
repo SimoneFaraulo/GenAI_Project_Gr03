@@ -19,7 +19,7 @@ transform = tforms.Compose([
 # Istanzia il nuovo dataset compatibile con la struttura locale
 try:
     data_set = CelebADataset(DATA_DIRECTORY, transform=transform)
-    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=NUM_WORKERS)
+    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
     print('Dataset CelebA caricato da:', DATA_DIRECTORY)
     print('Campioni trovati:', len(data_set))
 except Exception as e:
@@ -28,5 +28,4 @@ except Exception as e:
     data_loader = None
 
 def grayscale(img_tensor, output_channels=1):
-    '''Funzione di utilita' per convertire in scala di grigi se necessario'''
     return tforms.functional.rgb_to_grayscale(img_tensor, output_channels)

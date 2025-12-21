@@ -2,35 +2,25 @@ from PIL import Image
 import os
 import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F  # Import necessario per one_hot
+
 
 class CelebADataset(Dataset):
-    '''Dataset per CelebA che carica immagini e attributi specifici.
-       Restituisce (immagine, attributi).
-    '''
-
-    def __init__(self, folder, transform=None, split='train'):
-        '''
-        PARAMS
-           folder: directory root contenente 'img_align_celeba' e 'Anno'
-           transform: trasformazioni da applicare alle immagini
-           split: 'train', 'val', 'test' o 'all' (per ora carica tutto se non specificato diversamente)
-        '''
+    def __init__(self, folder, transform=None):
         self.folder = folder
         self.transform = transform
-        
-        # Percorsi basati sulla struttura fornita
+
+        # Percorsi
         self.img_dir = os.path.join(folder, 'img_align_celeba')
-        print(self.img_dir)
+        print(f"Loading images from: {self.img_dir}")
         self.attr_path = os.path.join(folder, 'list_attr_celeba.txt')
-        
-        # Indici degli attributi richiesti dal PDF:
-        # 20: Male, 31: Smiling, 39: Young
-        # (Nota: gli indici sono 0-based rispetto alla lista di attributi nel file)
+
+        # Indici: 20: Male, 31: Smiling, 39: Young
         self.target_indices = [20, 31, 39]
-        
+
         self.filenames = []
-        self.labels = []
-        
+        self.labels = []  # Conterrà interi da 0 a 7
+
         self._load_metadata()
 
     def _load_metadata(self):
@@ -39,47 +29,49 @@ class CelebADataset(Dataset):
 
         with open(self.attr_path, 'r') as f:
             lines = f.readlines()
-            
-        # La prima riga è il numero di immagini, la seconda i nomi degli attributi
-        # Dalla terza riga in poi ci sono i dati
-        # Format: 000001.jpg -1  1 -1 ...
-        
+
+        # Salta le prime 2 righe di header
         for i, line in enumerate(lines[2:]):
             parts = line.split()
             filename = parts[0]
-            
-            # Parsing degli attributi (da stringa a intero)
-            # Gli attributi sono valori -1 o 1. Li convertiamo spesso in 0 e 1 per PyTorch.
-            # Qui mantengo il valore originale o lo converto a 0/1: (val + 1) // 2
+
+            # Parsing attributi
             all_attrs = [int(x) for x in parts[1:]]
-            
-            # Seleziona solo gli attributi richiesti (Male, Smiling, Young)
-            selected_attrs = [all_attrs[idx] for idx in self.target_indices]
 
-            # Es: [-1, 1 , -1]
+            # Seleziona attributi target [-1, 1] e converti a [0, 1]
+            # selected_attrs sarà una lista tipo [0, 1, 1] (Femmina, Smiling, Young)
+            selected_attrs = [(all_attrs[idx] + 1) // 2 for idx in self.target_indices]
 
-            # Conversione in 0/1 (opzionale ma consigliata per CrossEntropy/BCE)
-            selected_attrs = [(x + 1) // 2 for x in selected_attrs]
-
-            # Es: [0, 1 , 0]
+            # --- NUOVA CODIFICA ---
+            # Convertiamo la lista binaria [bit2, bit1, bit0] in un intero decimale.
+            # Esempio: [Male, Smiling, Young] -> [1, 0, 1] -> 1*4 + 0*2 + 1*1 = 5
+            # Formula: v[0]*4 + v[1]*2 + v[2]*1
+            label_idx = selected_attrs[0] * 4 + selected_attrs[1] * 2 + selected_attrs[2] * 1
 
             self.filenames.append(filename)
-            self.labels.append(selected_attrs)
+            self.labels.append(label_idx)
 
     def __len__(self):
         return len(self.filenames)
 
     def __getitem__(self, index):
-        '''Restituisce l'immagine trasformata e il vettore degli attributi'''
         filename = self.filenames[index]
         img_path = os.path.join(self.img_dir, filename)
-        
+
         # Caricamento immagine
         img = Image.open(img_path).convert('RGB')
-        
+
         if self.transform:
             img = self.transform(img)
 
-        target = torch.tensor(self.labels[index], dtype=torch.float32)
-        
+        # Recupera l'indice della classe (es. 5)
+        label_idx = self.labels[index]
+
+        # Creazione One-Hot Vector
+        # num_classes=8 perché abbiamo 2^3 combinazioni
+        target_one_hot = F.one_hot(torch.tensor(label_idx), num_classes=8)
+
+        # Convertiamo in float32 perché la rete si aspetta float, non long
+        target = target_one_hot.float()
+
         return img, target
