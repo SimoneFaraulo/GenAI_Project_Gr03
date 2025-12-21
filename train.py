@@ -1,6 +1,6 @@
 import torch
 import sys
-from config.config import DEVICE, checkpoint_base, EPOCHS, MODEL_TYPE
+from config.config import DEVICE, checkpoint_base, EPOCHS, MODEL_TYPE, EXP_NUM
 from utility.checkpoint_manager import CheckpointManager
 from data.data import data_loader, data_set
 from utility.show_utils import parameter_count
@@ -70,7 +70,7 @@ def main():
     print(f"Parametri del modello: {parameter_count(model)}\n\n")
     
     # 3. Setup Cartelle e Checkpoint
-    checkpoint_folder = checkpoint_base(exp_name)
+    checkpoint_folder = checkpoint_base(f"{exp_name}_{EXP_NUM}")
     cpm = CheckpointManager(checkpoint_folder, kept_checkpoints=3)
     
     # 4. Ottimizzatore

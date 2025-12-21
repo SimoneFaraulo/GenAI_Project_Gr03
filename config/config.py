@@ -11,7 +11,7 @@ DATA_DIRECTORY = os.getenv("DATA_DIRECTORY", "./dataset")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))
 EPOCHS = int(os.getenv("EPOCHS", "2"))
 MODEL_TYPE = os.getenv('MODEL_TYPE', 'vae').lower()
-
+EXP_NUM = os.getenv("EXP_NUM", "1")
 CKP_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", '300'))
 FORCE_CKP = int(os.getenv("FORCE_CKP", '0'))
 PROGRESS_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", '30'))
