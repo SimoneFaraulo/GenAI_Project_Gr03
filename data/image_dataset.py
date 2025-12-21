@@ -55,9 +55,13 @@ class CelebADataset(Dataset):
             
             # Seleziona solo gli attributi richiesti (Male, Smiling, Young)
             selected_attrs = [all_attrs[idx] for idx in self.target_indices]
-            
+
+            # Es: [-1, 1 , -1]
+
             # Conversione in 0/1 (opzionale ma consigliata per CrossEntropy/BCE)
             selected_attrs = [(x + 1) // 2 for x in selected_attrs]
+
+            # Es: [0, 1 , 0]
 
             self.filenames.append(filename)
             self.labels.append(selected_attrs)
@@ -75,8 +79,7 @@ class CelebADataset(Dataset):
         
         if self.transform:
             img = self.transform(img)
-            
-        # Caricamento attributi come tensore float
+
         target = torch.tensor(self.labels[index], dtype=torch.float32)
         
         return img, target

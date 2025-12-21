@@ -1,8 +1,6 @@
 import torch
 import sys
-import os
-
-from config.config import DEVICE, checkpoint_base, BATCH_SIZE, EPOCHS
+from config.config import DEVICE, checkpoint_base, EPOCHS, MODEL_TYPE
 from utility.checkpoint_manager import CheckpointManager
 from data.data import data_loader, data_set
 from utility.show_utils import parameter_count
@@ -35,6 +33,25 @@ def vae_train_step(model, batch, device):
     
     return loss, metrics
 
+
+def diffusion_train_step(model, batch, device):
+    """
+    Step di training specifico per Diffusion Model.
+    """
+    images, attributes = batch
+    images = images.to(device)
+    attributes = attributes.to(device)
+
+    # Il modello calcola tutto internamente (forward diffusion + loss)
+    loss = model.compute_loss(images, attributes)
+
+    # Metriche per il logger
+    metrics = {
+        'mse': loss.item()
+    }
+
+    return loss, metrics
+
 # Puoi definire altre funzioni step qui, es: gan_train_step(...)
 
 
@@ -61,13 +78,14 @@ def main():
     
     # 5. Selezione della step function corretta
     # Qui mappiamo il tipo di modello alla sua funzione di training
-    current_model_type = os.getenv('MODEL_TYPE', 'vae').lower()
+    current_model_type = MODEL_TYPE
     
     if current_model_type == 'vae':
         step_fn = vae_train_step
+    elif current_model_type == 'diff':
+        step_fn = diffusion_train_step
     else:
-        # Fallback o logica per GAN
-        step_fn = vae_train_step 
+        raise ValueError(f"Unknown model type: {current_model_type}")
 
     # 6. Inizializzazione Trainer
     trainer = Trainer(

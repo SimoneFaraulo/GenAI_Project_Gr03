@@ -2,18 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from config.config import *
-
-
-class Skip(nn.Module):
-    def __init__(self, *layers):
-        super().__init__()
-        if len(layers)>1:
-            self.inner=nn.Sequential(*layers)
-        else:
-            self.inner=layers[0]
-
-    def forward(self, x):
-        return x+self.inner(x)
+from models.skip import Skip
 
 class EncoderBlock(nn.Module):
     """
@@ -136,11 +125,14 @@ class Encoder(nn.Module):
         
         # Espansione attributi spaziale
         cond_expanded = cond[:, :, None, None].expand(-1, -1, x.size(2), x.size(3))
+        #Es: [B, 3, 64, 64], [B, 3, 64, 64]
         x = torch.cat([x, cond_expanded], dim=1)
-        
-        x = self.encoder_net(x) 
+        # Es: [B, 6, 64, 64]
+        x = self.encoder_net(x)
+        # Es: [B, 6, 4, 4]
         x = torch.flatten(x, start_dim=1) # ignora la dimensione 0 del batch
-        
+        #Es : [B, 6*4*4]
+
         return self.fc_mu(x), self.fc_var(x)
 
 class Decoder(nn.Module):
@@ -175,7 +167,7 @@ class Decoder(nn.Module):
 
     def forward(self, z, cond):
         z_cond = torch.cat([z, cond], dim=1) # [B, 131]
-        
+
         x = self.decoder_input(z_cond) 
         x = x.view(-1, self.initial_reshape_dim, 4, 4) # [B, 256, 4, 4]
         
