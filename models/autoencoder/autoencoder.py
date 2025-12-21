@@ -114,8 +114,17 @@ class Encoder(nn.Module):
 
         self.encoder_net = nn.Sequential(*modules)
         
-        # Flatten: 256 * 4 * 4 = 4096
-        self.flatten_dim = hidden_dims[-1] * 4 * 4
+        # Calcoliamo quante volte dimezziamo l'immagine
+        num_downsamples = len(hidden_dims)
+        # IMG_SIZE è importato da config (64). 
+        # La dimensione spaziale finale sarà 64 / (2^num_layers)
+        # Con 6 layer: 64 / 64 = 1. Con 4 layer: 64 / 16 = 4.
+        self.final_spatial_dim = IMG_SIZE // (2 ** num_downsamples)
+        
+        if self.final_spatial_dim < 1:
+            raise ValueError(f"Troppi layer ({num_downsamples}) per una immagine {IMG_SIZE}x{IMG_SIZE}. La risoluzione collassa a 0.")
+
+        self.flatten_dim = hidden_dims[-1] * self.final_spatial_dim * self.final_spatial_dim
         
         self.fc_mu = nn.Linear(self.flatten_dim, latent_dim)
         self.fc_var = nn.Linear(self.flatten_dim, latent_dim)
@@ -142,8 +151,13 @@ class Decoder(nn.Module):
             
         self.initial_reshape_dim = hidden_dims[0] # 256
         
-        # Input lineare: Latent (128) + Attr (3) -> 4096
-        self.decoder_input = nn.Linear(latent_dim + ATTR_DIM, self.initial_reshape_dim * 4 * 4)
+        num_upsamples = len(hidden_dims) # Numero totale di layer nel decoder
+        # Nota: hidden_dims qui è già invertito, ma la lunghezza è la stessa dell'encoder
+        # La dimensione spaziale iniziale deve essere simmetrica a quella finale dell'encoder
+        self.start_spatial_dim = IMG_SIZE // (2 ** num_upsamples)
+        
+        # Input lineare: Latent -> Tensore Appiattito
+        self.decoder_input = nn.Linear(latent_dim + ATTR_DIM, self.initial_reshape_dim * self.start_spatial_dim * self.start_spatial_dim)
         
         modules = []
         # Costruzione blocchi Decoder
@@ -169,7 +183,8 @@ class Decoder(nn.Module):
         z_cond = torch.cat([z, cond], dim=1) # [B, 131]
 
         x = self.decoder_input(z_cond) 
-        x = x.view(-1, self.initial_reshape_dim, 4, 4) # [B, 256, 4, 4]
+        # Reshape usando la dimensione calcolata dinamicamente
+        x = x.view(-1, self.initial_reshape_dim, self.start_spatial_dim, self.start_spatial_dim)
         
         x = self.decoder_net(x) # -> [B, 32, 32, 32]
         x = self.final_layer(x) # -> [B, 3, 64, 64]
