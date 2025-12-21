@@ -1,6 +1,6 @@
 import torch
 import sys
-from config.config import DEVICE, checkpoint_base, EPOCHS, MODEL_TYPE, EXP_NUM
+from config.config import DEVICE, checkpoint_base, EPOCHS, MODEL_TYPE, EXP_NUM, LEARNING_RATE
 from utility.checkpoint_manager import CheckpointManager
 from data.data import data_loader, data_set
 from utility.show_utils import parameter_count
@@ -74,7 +74,7 @@ def main():
     cpm = CheckpointManager(checkpoint_folder, kept_checkpoints=3)
     
     # 4. Ottimizzatore
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
     
     # 5. Selezione della step function corretta
     # Qui mappiamo il tipo di modello alla sua funzione di training
