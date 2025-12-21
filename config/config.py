@@ -19,8 +19,8 @@ PROGRESS_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", '30'))
 # Comuni a tutti
 IMG_CHANNELS = 3          # RGB
 IMG_SIZE = 64             # Dimensione richiesta (CelebA)
-ATTR_DIM = 3              # Male, Smiling, Young
-COND_SHAPE = (3,)
+ATTR_DIM = 8              # One - Hot
+COND_SHAPE = (8,)
 
 # Params del VAE
 HIDDEN_DIMS = [32, 64, 128, 256]                 # Canali progressivi
@@ -30,6 +30,7 @@ LATENT_DIM = int(os.getenv("LATENT_DIM", "128")) # Dimensione spazio latente
 TIME_ENCODING_SIZE = int(os.getenv("TIME_ENCODING_SIZE", "64"))
 NOISE_SCHEDULE_L = int(os.getenv("NOISE_SCHEDULE_L", "1000"))
 DIFFUSION_HIDDEN_DIMS = [64, 128, 256, 512] # Più profondo per 64x64
+LAMBDA = float(os.getenv("LAMBDA", "3.0"))
 
 ## TODO
 

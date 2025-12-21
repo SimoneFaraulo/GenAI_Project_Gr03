@@ -28,5 +28,4 @@ except Exception as e:
     data_loader = None
 
 def grayscale(img_tensor, output_channels=1):
-    '''Funzione di utilità per convertire in scala di grigi se necessario'''
     return tforms.functional.rgb_to_grayscale(img_tensor, output_channels)
