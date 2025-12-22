@@ -126,11 +126,12 @@ class VisionMambaModel(nn.Module):
         else:
             cond = cond.to(device)
 
-        B = num_samples
+        B = num_samples # Questo è il batch size
 
         # 1. Inizializza lo stato dell'inferenza (Cache)
         for layer in self.layers:
-            layer.inference_start()
+            # MODIFICA FONDAMENTALE: Passo B (num_samples) a inference_start
+            layer.inference_start(batch_size=B)
 
         # 2. Primo step: Processare il token attributo
         c_emb = self.attr_embedding(cond).unsqueeze(1)  # [B, 1, Dim]

@@ -34,10 +34,10 @@ class MambaBlock(nn.Module):
         return y
 
     @torch.no_grad()
-    def inference_start(self):
+    def inference_start(self, batch_size=1): # MODIFICA: Aggiunto parametro batch_size
         self.cached_A = self.computeA()
         self.cached_h = torch.zeros(
-            1, 1, self.dim, self.state_size,
+            batch_size, 1, self.dim, self.state_size, # MODIFICA: Uso batch_size
             device=self.cached_A.device)
 
     def clean_cached(self):
@@ -105,9 +105,10 @@ class MambaLayer(nn.Module):
         return y
 
     @torch.no_grad()
-    def inference_start(self):
-        self.mamba.inference_start()
-        self.cached_x = torch.zeros(1, self.conv_kernel, self.edim)
+    def inference_start(self, batch_size=1): # MODIFICA: Aggiunto parametro batch_size
+        self.mamba.inference_start(batch_size) # Passo batch_size giù
+        # MODIFICA: Uso batch_size nella creazione di cached_x
+        self.cached_x = torch.zeros(batch_size, self.conv_kernel, self.edim)
 
     @torch.no_grad()
     def inference_step(self, x):
@@ -148,8 +149,8 @@ class ResidualMambaLayer(nn.Module):
     def forward(self, x):
         return x + self.mamba(self.norm(x))
 
-    def inference_start(self):
-        self.mamba.inference_start()
+    def inference_start(self, batch_size=1): # MODIFICA: Aggiunto parametro
+        self.mamba.inference_start(batch_size) # Passo batch_size
 
     def inference_step(self, x):
         return x + self.mamba.inference_step(self.norm(x))
