@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from pscan import pscan # Assicurati che pscan sia accessibile o copiato nel progetto
+from .pscan import pscan # Assicurati che pscan sia accessibile o copiato nel progetto
 # --- CLASSI CORE FORNITE DAL TUO MODEL.PY (INALTERATE) ---
 
 class MambaBlock(nn.Module):
