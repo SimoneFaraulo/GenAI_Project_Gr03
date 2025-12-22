@@ -67,7 +67,17 @@ class MambaBlock(nn.Module):
         DeltaA = Delta[:, :, :, None] * A[None, None, :, :]
         Abar = torch.exp(DeltaA)
         DeltaB = Delta[:, :, :, None] * B[:, :, None, :]
-        Bbar = (Abar - 1.0) / (DeltaA + 1e-7) * DeltaB
+
+        # Modifica per stabilità numerica:
+        # Quando DeltaA è vicino a 0, (exp(x)-1)/x approssima 1.
+        # Usiamo torch.nan_to_num o semplicemente evitiamo la divisione critica
+        denom = DeltaA + 1e-7
+        # Evita divisione per zero esatta se DeltaA è -1e-7
+        # Una soluzione semplice è usare un epsilon diverso o abs nel denom se x fosse positivo,
+        # ma qui x è negativo. Una fix pratica è non usare il termine additivo se non necessario o aumentarlo.
+        # Soluzione rapida:
+        Bbar = (Abar - 1.0) / (denom.abs().clamp(min=1e-10) * denom.sign()) * DeltaB
+
         return Abar, Bbar
 
     def perform_scan(self, Abar, Bbar, x):

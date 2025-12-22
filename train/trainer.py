@@ -1,4 +1,5 @@
 import time
+import torch
 from utility.progress_indicator import ProgressIndicator
 from utility.training_utility import save_training_checkpoint, save_snapshot
 from config.config import CKP_INTERVAL, FORCE_CKP, PROGRESS_INTERVAL
@@ -48,6 +49,9 @@ class Trainer:
                 # 2. Backpropagation generica
                 self.optimizer.zero_grad()
                 loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+
                 self.optimizer.step()
                 
                 # 3. Logging e Checkpoint periodico

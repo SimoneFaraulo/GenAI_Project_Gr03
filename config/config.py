@@ -13,12 +13,12 @@ PROGRESS_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", '30'))
 
 DATA_DIRECTORY = os.getenv("DATA_DIRECTORY", "./dataset")
 
-MODEL_TYPE = os.getenv('MODEL_TYPE', 'diff').lower()
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "64"))
+MODEL_TYPE = os.getenv('MODEL_TYPE', 'mamba').lower()
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))
 EPOCHS = int(os.getenv("EPOCHS", "2"))
 LEARNING_RATE = float(os.getenv("LEARNING_RATE", "0.0005"))
 EXP_NUM = os.getenv("EXP_NUM", "1")
-NUM_WORKERS = int(os.getenv("NUM_WORKERS", "8"))
+NUM_WORKERS = int(os.getenv("NUM_WORKERS", "0"))
 
 # Comuni a tutti
 IMG_CHANNELS = 3          # RGB
@@ -53,11 +53,11 @@ DIFFUSION_HIDDEN_DIMS = parse_int_list("DIFFUSION_HIDDEN_DIMS", [64, 128, 256, 5
 LAMBDA = float(os.getenv("LAMBDA", "3.0"))
 
 # Params Mamba (Vision Mamba)
-MAMBA_PATCH_SIZE = 4            # Dimensione della patch (SOTA per 64x64 è 4 o 8)
-MAMBA_DIM = 512                 # Embedding dimension (D)
+MAMBA_PATCH_SIZE = 8            # Dimensione della patch (SOTA per 64x64 è 4 o 8)
+MAMBA_DIM = 64                 # Embedding dimension (D)
 MAMBA_STATE_SIZE = 16           # State size (N)
 MAMBA_EXPANSION = 2             # Expansion factor (E)
-MAMBA_LAYERS = 8                # Numero di layer
+MAMBA_LAYERS = 1                # Numero di layer
 MAMBA_CONV_KERNEL = 4           # Kernel della conv locale 1D interna a Mamba
 
 ## TODO

@@ -101,8 +101,7 @@ class VisionMambaModel(nn.Module):
 
         # Dobbiamo "patchificare" l'immagine target per confrontarla
         # Usiamo unfold per estrarre patch: [B, C, H, W] -> patches
-        target_patches = real_imgs.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size,
-                                                                                      self.patch_size)
+        target_patches = real_imgs.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
         # target_patches: [B, C, H_patches, W_patches, P, P]
 
         target_patches = target_patches.contiguous().view(B, self.img_channels, -1, self.patch_size, self.patch_size)
