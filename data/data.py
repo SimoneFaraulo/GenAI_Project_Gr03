@@ -19,7 +19,7 @@ transform = tforms.Compose([
 # Istanzia il nuovo dataset compatibile con la struttura locale
 try:
     data_set = CelebADataset(DATA_DIRECTORY, transform=transform)
-    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+    data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
     print('Dataset CelebA caricato da:', DATA_DIRECTORY)
     print('Campioni trovati:', len(data_set))
 except Exception as e:

@@ -110,6 +110,15 @@ class ConditionalDiffusion(nn.Module):
         # Componenti ausiliarie
         self.noise_schedule = NoiseSchedule(device=DEVICE)
         self.time_encoding = TimeEncoding(TIME_ENCODING_SIZE, device=DEVICE)
+        
+        # --- NUOVO: Attribute Embedding ---
+        # Proietta il vettore attributi (dim 3) in uno spazio più ampio (dim 64)
+        self.attr_embed = nn.Sequential(
+            nn.Linear(ATTR_DIM, ATTR_EMBED_DIM),
+            nn.SiLU(), # SiLU è standard nei Diffusion Models
+            nn.Linear(ATTR_EMBED_DIM, ATTR_EMBED_DIM),
+        )
+        # ----------------------------------
 
         # Struttura Rete (Adattata a IMG_SIZE e CHANNELS)
         # Pre: da RGB (3) a Hidden[0] (64)
@@ -132,8 +141,13 @@ class ConditionalDiffusion(nn.Module):
         Predicts noise given x_t, t, and condition.
         """
         enc = self.time_encoding[t]
+        
+        # Applicazione embedding
+        cond_emb = self.attr_embed(cond)
+        
         x_in = self.pre(x)
-        y = self.unet(x_in, enc, cond)
+        y = self.unet(x_in, enc, cond_emb)
+        
         output = self.post(y)
         return output
 
@@ -147,7 +161,10 @@ class ConditionalDiffusion(nn.Module):
         # feat_list[0]: outer (es. 64)
         # feat_list[1]: inner (es. 128)
         # ATTR_DIM: dimensione condizionamento (es. 3)
-        return UNetBlock(size, feat_list[0], feat_list[1], ATTR_DIM, inner_block)
+        #return UNetBlock(size, feat_list[0], feat_list[1], ATTR_DIM, inner_block)
+        
+        # MODIFICA: Passiamo ATTR_EMBED_DIM invece di ATTR_DIM
+        return UNetBlock(size, feat_list[0], feat_list[1], ATTR_EMBED_DIM, inner_block)
 
     # --- METODI AGGIUNTIVI PER COMPATIBILITÀ TRAINER ---
     def compute_loss(self, x0, cond):
@@ -162,7 +179,10 @@ class ConditionalDiffusion(nn.Module):
         # Creiamo una copia per non modificare il tensore originale nel batch
         cond = cond.clone()
         u = torch.rand((batch_size,), device=x0.device)
+        
         # Azzeriamo il condizionamento dove u < P
+        # Questa riga funziona perfettamente anche con i vettori -1/1.
+        # Sostituisce i valori reali (-1 o 1) con 0.0.
         cond[u < P, :] = 0.0
 
         # 2. Scelta casuale dei timestep (uno per ogni sample nel minibatch)

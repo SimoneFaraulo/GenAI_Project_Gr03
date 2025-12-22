@@ -103,7 +103,10 @@ class Encoder(nn.Module):
         if hidden_dims is None: hidden_dims = HIDDEN_DIMS
         
         # Input: RGB (3) + Attributi (3) = 6 canali
-        current_channels = in_channels + ATTR_DIM 
+        # current_channels = in_channels + ATTR_DIM 
+        
+        # Poiché riceviamo l'embedding già fatto, concateniamo 64 canali extra.
+        current_channels = in_channels + ATTR_EMBED_DIM
         
         modules = []
         # Costruzione blocchi Encoder
@@ -129,11 +132,11 @@ class Encoder(nn.Module):
         self.fc_mu = nn.Linear(self.flatten_dim, latent_dim)
         self.fc_var = nn.Linear(self.flatten_dim, latent_dim)
 
-    def forward(self, x, cond):
+    def forward(self, x, cond_emb):
         # x: [B, 3, 64, 64], cond: [B, 3]
         
         # Espansione attributi spaziale
-        cond_expanded = cond[:, :, None, None].expand(-1, -1, x.size(2), x.size(3))
+        cond_expanded = cond_emb[:, :, None, None].expand(-1, -1, x.size(2), x.size(3))
         #Es: [B, 3, 64, 64], [B, 3, 64, 64]
         x = torch.cat([x, cond_expanded], dim=1)
         # Es: [B, 6, 64, 64]
@@ -156,8 +159,16 @@ class Decoder(nn.Module):
         # La dimensione spaziale iniziale deve essere simmetrica a quella finale dell'encoder
         self.start_spatial_dim = IMG_SIZE // (2 ** num_upsamples)
         
-        # Input lineare: Latent -> Tensore Appiattito
-        self.decoder_input = nn.Linear(latent_dim + ATTR_DIM, self.initial_reshape_dim * self.start_spatial_dim * self.start_spatial_dim)
+        # # Input lineare: Latent -> Tensore Appiattito
+        # self.decoder_input = nn.Linear(
+        #     latent_dim + ATTR_DIM, 
+        #     self.initial_reshape_dim * self.start_spatial_dim * self.start_spatial_dim
+        # )
+        
+        self.decoder_input = nn.Linear(
+            latent_dim + ATTR_EMBED_DIM, 
+            self.initial_reshape_dim * self.start_spatial_dim * self.start_spatial_dim
+        )
         
         modules = []
         # Costruzione blocchi Decoder
@@ -179,8 +190,8 @@ class Decoder(nn.Module):
             nn.Sigmoid() 
         )
 
-    def forward(self, z, cond):
-        z_cond = torch.cat([z, cond], dim=1) # [B, 131]
+    def forward(self, z, cond_emb):
+        z_cond = torch.cat([z, cond_emb], dim=1) # [B, 131]
 
         x = self.decoder_input(z_cond) 
         # Reshape usando la dimensione calcolata dinamicamente
@@ -194,6 +205,14 @@ class Decoder(nn.Module):
 class ConditionalVAE(nn.Module):
     def __init__(self):
         super().__init__()
+        
+        # Definizione dell'Embedding unico per Encoder e Decoder
+        self.attr_embed = nn.Sequential(
+            nn.Linear(ATTR_DIM, ATTR_EMBED_DIM),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(ATTR_EMBED_DIM, ATTR_EMBED_DIM),
+        )
+        
         self.encoder = Encoder(in_channels=IMG_CHANNELS, latent_dim=LATENT_DIM)
         self.decoder = Decoder(out_channels=IMG_CHANNELS, latent_dim=LATENT_DIM)
 
@@ -203,12 +222,15 @@ class ConditionalVAE(nn.Module):
         return mu + eps * std
 
     def forward(self, x, cond):
-        mu, log_var = self.encoder(x, cond)
+        # 3. Calcolo dell'embedding UNA SOLA VOLTA
+        cond_emb = self.attr_embed(cond) # -> [Batch, ATTR_EMBED_DIM]
+        
+        mu, log_var = self.encoder(x, cond_emb)
         z = self.reparameterize(mu, log_var)
-        reconstruction = self.decoder(z, cond)
+        reconstruction = self.decoder(z, cond_emb)
         return reconstruction, mu, log_var
     
-    def loss_function(self, recon_x, x, mu, log_var, beta=1.0):
+    def loss_function(self, recon_x, x, mu, log_var, beta=BETA):
         recon_loss = F.mse_loss(recon_x, x, reduction='sum')
         kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
         return recon_loss + beta * kl_loss, recon_loss, kl_loss
@@ -216,7 +238,13 @@ class ConditionalVAE(nn.Module):
     def sample(self, num_samples, device, cond=None):
         z = torch.randn(num_samples, LATENT_DIM).to(device)
         if cond is None:
+            # Genera attributi casuali (vettori -1/1)
             cond = torch.randint(0, 2, (num_samples, ATTR_DIM)).float().to(device)
+            cond = (cond * 2) - 1 # Se usi lo scaling -1/1
         else:
             cond = cond.to(device)
-        return self.decoder(z, cond)
+        
+        # Anche nel sampling dobbiamo embeddare gli attributi prima di passarli al decoder
+        cond_emb = self.attr_embed(cond)
+        
+        return self.decoder(z, cond_emb)

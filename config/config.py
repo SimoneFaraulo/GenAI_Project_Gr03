@@ -23,17 +23,33 @@ NUM_WORKERS = int(os.getenv("NUM_WORKERS", "8"))
 # Comuni a tutti
 IMG_CHANNELS = 3          # RGB
 IMG_SIZE = 64             # Dimensione richiesta (CelebA)
-ATTR_DIM = 8              # One - Hot
+ATTR_DIM = 3              # 3 per -1 e 1 # 8 per One - Hot
 COND_SHAPE = (8,)
 
+
+ATTR_EMBED_DIM = int(os.getenv("ATTR_EMBED_DIM", "128"))       # Nuova dimensione dopo l'embedding
+
+# Funzione helper per parsare liste di interi da stringhe env (es: "32,64,128")
+def parse_int_list(env_var_name, default_list):
+    val = os.getenv(env_var_name)
+    if val:
+        try:
+            # Divide per virgola e converte ogni elemento in int
+            return [int(x.strip()) for x in val.split(',')]
+        except ValueError:
+            print(f"Attenzione: Formato non valido per {env_var_name}. Uso il default.")
+            return default_list
+    return default_list
+
 # Params del VAE
-HIDDEN_DIMS = [32, 64, 128, 256]                 # Canali progressivi
+HIDDEN_DIMS = parse_int_list("HIDDEN_DIMS", [32, 64, 128, 256]) # 
 LATENT_DIM = int(os.getenv("LATENT_DIM", "128")) # Dimensione spazio latente
+BETA = float(os.getenv("BETA", "1.0"))           # Peso della KL Loss
 
 # Params del Diffusion
 TIME_ENCODING_SIZE = int(os.getenv("TIME_ENCODING_SIZE", "64"))
 NOISE_SCHEDULE_L = int(os.getenv("NOISE_SCHEDULE_L", "1000"))
-DIFFUSION_HIDDEN_DIMS = [64, 128, 256, 512] # Più profondo per 64x64
+DIFFUSION_HIDDEN_DIMS = parse_int_list("DIFFUSION_HIDDEN_DIMS", [64, 128, 256, 512, 1024])
 LAMBDA = float(os.getenv("LAMBDA", "3.0"))
 
 ## TODO
