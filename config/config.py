@@ -29,6 +29,7 @@ COND_SHAPE = (8,)
 # Params del VAE
 HIDDEN_DIMS = [32, 64, 128, 256]                 # Canali progressivi
 LATENT_DIM = int(os.getenv("LATENT_DIM", "128")) # Dimensione spazio latente
+BETA = float(os.getenv("BETA", "1.0"))
 
 # Params del Diffusion
 TIME_ENCODING_SIZE = int(os.getenv("TIME_ENCODING_SIZE", "64"))

@@ -208,7 +208,7 @@ class ConditionalVAE(nn.Module):
         reconstruction = self.decoder(z, cond)
         return reconstruction, mu, log_var
     
-    def loss_function(self, recon_x, x, mu, log_var, beta=1.0):
+    def loss_function(self, recon_x, x, mu, log_var, beta=BETA):
         recon_loss = F.mse_loss(recon_x, x, reduction='sum')
         kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
         return recon_loss + beta * kl_loss, recon_loss, kl_loss
