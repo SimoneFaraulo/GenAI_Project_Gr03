@@ -188,13 +188,20 @@ class ConditionalDiffusion(nn.Module):
         # 2. Scelta casuale dei timestep (uno per ogni sample nel minibatch)
         t = torch.randint(0, self.noise_schedule.schedule_len, (batch_size,), device=x0.device)
 
+        # Ritorna vettore dim [B] con valori compresi tra 0 e 1000
+
         # 3. Generazione del rumore casuale (eps)
         eps = torch.randn_like(x0)
+
+        # Genera un tensore di dimensione [B, 3, img_size, img_size]
 
         # 4. Calcolo dell'immagine latente (zt)
         # Recuperiamo i coefficienti dallo schedule e facciamo reshape per il broadcasting [B, 1, 1, 1]
         sqrt_alpha = self.noise_schedule.sqrt_alpha[t].view(-1, 1, 1, 1)
         sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[t].view(-1, 1, 1, 1)
+
+        # restituisce un vettore di alfa corrispondente al passo al passo t per ogni campione nel batch
+        # lo visualizzo come tensore mantenendo la dim del batch e estendendo la dimensione su ogni altra dimensione
 
         # Formula esatta: zt = sqrt_alpha * x + sqrt_1_alpha * eps
         zt = sqrt_alpha * x0 + sqrt_1_alpha * eps
