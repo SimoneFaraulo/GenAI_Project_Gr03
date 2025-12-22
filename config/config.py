@@ -36,6 +36,14 @@ NOISE_SCHEDULE_L = int(os.getenv("NOISE_SCHEDULE_L", "1000"))
 DIFFUSION_HIDDEN_DIMS = [64, 128, 256, 512] # Più profondo per 64x64
 LAMBDA = float(os.getenv("LAMBDA", "3.0"))
 
+# Params Mamba (Vision Mamba)
+MAMBA_PATCH_SIZE = 4            # Dimensione della patch (SOTA per 64x64 è 4 o 8)
+MAMBA_DIM = 512                 # Embedding dimension (D)
+MAMBA_STATE_SIZE = 16           # State size (N)
+MAMBA_EXPANSION = 2             # Expansion factor (E)
+MAMBA_LAYERS = 8                # Numero di layer
+MAMBA_CONV_KERNEL = 4           # Kernel della conv locale 1D interna a Mamba
+
 ## TODO
 
 def checkpoint_base(name):
