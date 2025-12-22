@@ -1,8 +1,6 @@
 import torch
 from torch import nn
-from pscan import pscan  # Assicurati che pscan sia accessibile o copiato nel progetto
-
-
+from pscan import pscan # Assicurati che pscan sia accessibile o copiato nel progetto
 # --- CLASSI CORE FORNITE DAL TUO MODEL.PY (INALTERATE) ---
 
 class MambaBlock(nn.Module):
@@ -139,7 +137,6 @@ class MambaLayer(nn.Module):
         if inference:
             y = y[:, -1:, :]
         return y
-
 
 class ResidualMambaLayer(nn.Module):
     def __init__(self, dim, state_size, conv_kernel=4,

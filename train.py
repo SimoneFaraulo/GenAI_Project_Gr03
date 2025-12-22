@@ -52,7 +52,24 @@ def diffusion_train_step(model, batch, device):
 
     return loss, metrics
 
-# Puoi definire altre funzioni step qui, es: gan_train_step(...)
+
+def mamba_train_step(model, batch, device):
+    """
+    Step di training specifico per Vision Mamba (Autoregressive).
+    """
+    images, attributes = batch
+    images = images.to(device)
+    attributes = attributes.to(device)
+
+    # 1. Forward Pass
+    # Il modello ritorna le patch predette
+    pred_patches = model(images, attributes)
+
+    # 2. Calcolo Loss
+    # La funzione loss_function è definita dentro VisionMambaModel per incapsulare la logica di patchify del target
+    loss, metrics = model.loss_function(pred_patches, images)
+
+    return loss, metrics
 
 
 def main():
@@ -84,6 +101,8 @@ def main():
         step_fn = vae_train_step
     elif current_model_type == 'diff':
         step_fn = diffusion_train_step
+    elif current_model_type == 'mamba':
+        step_fn = mamba_train_step
     else:
         raise ValueError(f"Unknown model type: {current_model_type}")
 
