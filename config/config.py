@@ -42,7 +42,7 @@ def parse_int_list(env_var_name, default_list):
     return default_list
 
 # Params del VAE
-HIDDEN_DIMS = parse_int_list("HIDDEN_DIMS", [32, 64, 128, 256]) # 
+HIDDEN_DIMS = parse_int_list("HIDDEN_DIMS", [64, 128, 256, 512]) # Strati encoder/decoder 
 LATENT_DIM = int(os.getenv("LATENT_DIM", "128")) # Dimensione spazio latente
 BETA = float(os.getenv("BETA", "1.0"))           # Peso della KL Loss
 
@@ -53,12 +53,12 @@ DIFFUSION_HIDDEN_DIMS = parse_int_list("DIFFUSION_HIDDEN_DIMS", [64, 128, 256, 5
 LAMBDA = float(os.getenv("LAMBDA", "3.0"))
 
 # Params Mamba (Vision Mamba)
-MAMBA_PATCH_SIZE = 8            # Dimensione della patch (SOTA per 64x64 è 4 o 8)
-MAMBA_DIM = 64                 # Embedding dimension (D)
-MAMBA_STATE_SIZE = 16           # State size (N)
-MAMBA_EXPANSION = 2             # Expansion factor (E)
-MAMBA_LAYERS = 1                # Numero di layer
-MAMBA_CONV_KERNEL = 4           # Kernel della conv locale 1D interna a Mamba
+MAMBA_PATCH_SIZE = int(os.getenv("MAMBA_PATCH_SIZE", "8"))           # Dimensione della patch (SOTA per 64x64 è 4 o 8)
+MAMBA_DIM = int(os.getenv("MAMBA_DIM", "128"))                       # Embedding dimension (D)
+MAMBA_STATE_SIZE = int(os.getenv("MAMBA_STATE_SIZE", "16"))          # State size (N)
+MAMBA_EXPANSION = int(os.getenv("MAMBA_EXPANSION", "2"))             # Expansion factor (E)
+MAMBA_LAYERS = int(os.getenv("MAMBA_LAYERS", "4"))                   # Numero di layer
+MAMBA_CONV_KERNEL = int(os.getenv("MAMBA_CONV_KERNEL", "4"))         # Kernel della conv locale 1D interna a Mamba
 
 ## TODO
 

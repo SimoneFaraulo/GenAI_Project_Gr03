@@ -84,7 +84,7 @@ def main():
         sys.exit(1)
         
     model = model.to(DEVICE)
-    print(f"Parametri del modello: {parameter_count(model)}\n\n")
+    print(f"Parametri del modello: {parameter_count(model):,}\n\n")
     
     # 3. Setup Cartelle e Checkpoint
     checkpoint_folder = checkpoint_base(f"{exp_name}_{EXP_NUM}")
