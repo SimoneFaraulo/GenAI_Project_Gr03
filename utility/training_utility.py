@@ -44,31 +44,33 @@ def save_snapshot(model, dataset, folder, epoch_count, device, num_samples=8):
     attrs = torch.stack([s[1] for s in samples]).to(device)
 
     with torch.no_grad():
-        # --- LOGICA ADATTIVA ---
-
-        # CASO A: Il modello è un Generatore puro (es. Diffusion Model)
-        # Verifichiamo se ha un metodo 'sample' esposto
+        rows_to_save = [real_imgs.cpu()] # Riga 1: Immagini originali
+        
+        # Se è un VAE, vogliamo vedere la anche la ricostruzione
+        model_name = type(model).__name__.lower()
+        
+        if 'vae' in model_name:
+            # Forward pass per ricostruire
+            output = model(real_imgs, attrs)
+            # Output (recon, mu, logvar)
+            recon = output[0]
+            
+            rows_to_save.append(recon.cpu()) # Riga 2: Ricostruzione del VAE
+        
+        # Per tutti i modelli chiamiamo la generazione
         if hasattr(model, 'sample') and callable(model.sample):
             # Chiamiamo il sample passando gli attributi delle immagini reali.
             # Questo permette di confrontare:
             # "Reale (Uomo)" vs "Generato (Uomo)"
             # Nota: Non passiamo real_imgs, perché il diffusion parte dal rumore.
-            recon_imgs = model.sample(num_samples=num_samples, device=device, cond=attrs)
+            if hasattr(model, 'sample') and callable(model.sample):
+                gen_imgs = model.sample(num_samples=num_samples, device=device, cond=attrs)
+                rows_to_save.append(gen_imgs.cpu()) # Riga 3 (o 2): Generazione
 
-        # CASO B: Il modello è un Autoencoder (es. VAE)
-        # Funziona per ricostruzione diretta dell'input
-        else:
-            output = model(real_imgs, attrs)
-
-            # Gestione output multipli (es. VAE ritorna (recon, mu, logvar))
-            if isinstance(output, tuple):
-                recon_imgs = output[0]
-            else:
-                recon_imgs = output
 
         # Salvataggio immagine:
         # Passiamo .cpu() perché matplotlib lavora su CPU/Numpy
-        save_images(filepath, real_imgs.cpu(), recon_imgs.cpu(), figsize=(10, 5))
+        save_images(filepath, *rows_to_save, figsize=(10, 3 * len(rows_to_save)))
 
     print(f" -> Snapshot saved: {filepath}")
 
