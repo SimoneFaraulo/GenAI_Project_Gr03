@@ -17,12 +17,11 @@ def get_model_from_env():
     
     print(f"Factory: Initializing model type '{model_type}'...")
     
-    match model_type:
-        case 'vae':
-            return ConditionalVAE(), "vae_celeba_experiment"
-        case 'diff':
-            return ConditionalDiffusion(), "diff_celeba_experiment"
-        case 'mamba':
-            return VisionMambaModel(), "mamba_celeba_experiment"
-        case _:
-            raise ValueError(f"Unknown MODEL_TYPE: {model_type}. Available: 'vae', 'diff', 'mamba'")
+    if model_type == 'vae':
+        return ConditionalVAE(), "vae_celeba_experiment"
+    elif model_type == 'diff':
+         return ConditionalDiffusion(), "diff_celeba_experiment"
+    elif model_type == 'mamba':
+        return VisionMambaModel(), "mamba_celeba_experiment"
+    else:
+        raise ValueError(f"Unknown MODEL_TYPE: {model_type}. Available: 'vae'")
