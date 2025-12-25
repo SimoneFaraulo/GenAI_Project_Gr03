@@ -18,7 +18,6 @@ class Trainer:
         self.dataset = dataset # Serve per gli snapshot
         self.device = device
         self.cpm = checkpoint_manager
-        self.train_step_fn = train_step_fn
         self.checkpoint_folder = checkpoint_folder
         self.epoch_count = 0
 
@@ -44,7 +43,7 @@ class Trainer:
             
             for i, batch in enumerate(self.train_loader):
                 # 1. Step di training specifico del modello
-                loss, log_metrics = self.train_step_fn(self.model, batch, self.device)
+                loss, log_metrics = self.model.train_step_fn(batch, self.device)
                 
                 # 2. Backpropagation generica
                 self.optimizer.zero_grad()

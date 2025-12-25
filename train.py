@@ -30,11 +30,8 @@ def main():
     
     # 4. Ottimizzatore
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    
-    # 5. Selezione della step function corretta
-    step_fn = model.train_step_fn()
 
-    # 6. Inizializzazione Trainer
+    # 5. Inizializzazione Trainer
     trainer = Trainer(
         model=model,
         optimizer=optimizer,
@@ -42,11 +39,10 @@ def main():
         dataset=data_set,
         device=DEVICE,
         checkpoint_manager=cpm,
-        train_step_fn=step_fn,
         checkpoint_folder=checkpoint_folder
     )
     
-    # 7. Avvio
+    # 6. Avvio
     trainer.load_checkpoint()
     trainer.train_loop(epochs=epochs, batches_per_epoch=len(data_loader))
 
