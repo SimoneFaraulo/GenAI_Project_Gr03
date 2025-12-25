@@ -1,3 +1,4 @@
+import re
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -235,6 +236,7 @@ class ConditionalVAE(nn.Module):
         kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
         return recon_loss + beta * kl_loss, recon_loss, kl_loss
 
+    @torch.no_grad()
     def sample(self, num_samples, device, cond=None):
         z = torch.randn(num_samples, LATENT_DIM).to(device)
         if cond is None:
@@ -248,3 +250,31 @@ class ConditionalVAE(nn.Module):
         cond_emb = self.attr_embed(cond)
         
         return self.decoder(z, cond_emb)
+    
+    def vae_train_step(model, batch, device):
+        """
+        Definisce come processare un batch per il VAE.
+        Ritorna: (total_loss, dizionario_metriche_per_log)
+        """
+        images, attributes = batch
+        images = images.to(device)
+        attributes = attributes.to(device)
+        
+        # Forward
+        recon, mu, log_var = model(images, attributes)
+        
+        # Loss
+        loss, recon_loss, kl_loss = model.loss_function(recon, images, mu, log_var)
+        
+        # Metriche per il logger (normalizzate per batch size per leggibilità)
+        bs = images.size(0)
+        metrics = {
+            'recon': recon_loss.item() / bs,
+            'kl': kl_loss.item() / bs
+        }
+        
+        return loss, metrics
+    
+    def train_step_fn(self):
+        """Restituisce la funzione di step di training specifica per il modello"""
+        return self.vae_train_step

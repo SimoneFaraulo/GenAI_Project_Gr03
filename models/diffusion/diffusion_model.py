@@ -282,3 +282,25 @@ class ConditionalDiffusion(nn.Module):
             self.train()
 
         return z
+    
+    def diffusion_train_step(model, batch, device):
+        """
+        Step di training specifico per Diffusion Model.
+        """
+        images, attributes = batch
+        images = images.to(device)
+        attributes = attributes.to(device)
+
+        # Il modello calcola tutto internamente (forward diffusion + loss)
+        loss = model.compute_loss(images, attributes)
+
+        # Metriche per il logger
+        metrics = {
+            'mse': loss.item()
+        }
+
+        return loss, metrics
+    
+    def train_step_fn(self):
+        """Restituisce la funzione di step di training specifica per il modello"""
+        return self.diffusion_train_step

@@ -111,7 +111,7 @@ class VisionMambaModel(nn.Module):
         loss = F.mse_loss(pred_patches, target_patches)
 
         # Metriche accessorie
-        return loss, {'mse': loss.item()}
+        return loss
 
     @torch.no_grad()
     def sample(self, num_samples, device, cond=None):
@@ -197,3 +197,30 @@ class VisionMambaModel(nn.Module):
 
         self.train()
         return recon_img
+    
+    def mamba_train_step(model, batch, device):
+        """
+        Step di training specifico per Vision Mamba (Autoregressive).
+        """
+        images, attributes = batch
+        images = images.to(device)
+        attributes = attributes.to(device)
+
+        # 1. Forward Pass
+        # Il modello ritorna le patch predette
+        pred_patches = model(images, attributes)
+
+        # 2. Calcolo Loss
+        # La funzione loss_function è definita dentro VisionMambaModel per incapsulare la logica di patchify del target
+        loss = model.loss_function(pred_patches, images)
+        
+        # 3. Metriche per il logger
+        metrics = {
+            'mse': loss.item()
+        }
+
+        return loss, metrics
+    
+    def train_step_fn(self):
+        """Restituisce la funzione di step di training specifica per il modello"""
+        return self.mamba_train_step
