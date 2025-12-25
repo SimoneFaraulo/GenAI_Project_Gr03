@@ -274,6 +274,6 @@ class ConditionalVAE(nn.Module):
         
         return loss, metrics
     
-    def train_step_fn(self):
+    def train_step_fn(self, batch, device):
         """Restituisce la funzione di step di training specifica per il modello"""
-        return self.vae_train_step
+        return self.vae_train_step(batch, device)

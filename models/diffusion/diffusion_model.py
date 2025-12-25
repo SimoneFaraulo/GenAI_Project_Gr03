@@ -301,6 +301,6 @@ class ConditionalDiffusion(nn.Module):
 
         return loss, metrics
     
-    def train_step_fn(self):
+    def train_step_fn(self, batch, device):
         """Restituisce la funzione di step di training specifica per il modello"""
-        return self.diffusion_train_step
+        return self.diffusion_train_step(batch, device)
