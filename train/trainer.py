@@ -6,7 +6,7 @@ from config.config import CKP_INTERVAL, FORCE_CKP, PROGRESS_INTERVAL
 
 class Trainer:
     def __init__(self, model, optimizer, train_loader, dataset, device, 
-                 checkpoint_manager, train_step_fn, checkpoint_folder):
+                 checkpoint_manager, checkpoint_folder):
         """
         Args:
             train_step_fn: Funzione che accetta (model, batch, device) e 
