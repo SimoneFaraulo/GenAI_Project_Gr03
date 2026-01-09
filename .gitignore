@@ -12,5 +12,5 @@
 /miniset/
 /temp
 /weights/*.ckp
-.idea
-.vscode
+.idea/
+.vscode/
