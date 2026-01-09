@@ -1,7 +1,6 @@
 import torch
 from torch import nn
-from .pscan import pscan # Assicurati che pscan sia accessibile o copiato nel progetto
-# --- CLASSI CORE FORNITE DAL TUO MODEL.PY (INALTERATE) ---
+from .pscan import pscan
 
 class MambaBlock(nn.Module):
     def __init__(self, dim, state_size):
@@ -9,14 +8,11 @@ class MambaBlock(nn.Module):
         self.dim = dim
         self.state_size = state_size
 
-        # Initialize the A tensor
         A = torch.ones(dim, state_size)
         r = torch.linspace(0.5, state_size / 2, state_size)
         A *= r[None, :]
         logA = torch.log(A)
-        self.logA = nn.Parameter(logA)  # A is -torch.exp(self.logA)
-
-        # define the other parameters and layers
+        self.logA = nn.Parameter(logA)
         self.projB = nn.Linear(dim, state_size)
         self.projC = nn.Linear(dim, state_size)
         self.projDelta = nn.Linear(dim, 1, bias=False)
@@ -34,10 +30,10 @@ class MambaBlock(nn.Module):
         return y
 
     @torch.no_grad()
-    def inference_start(self, batch_size=1): # MODIFICA: Aggiunto parametro batch_size
+    def inference_start(self, batch_size=1):
         self.cached_A = self.computeA()
         self.cached_h = torch.zeros(
-            batch_size, 1, self.dim, self.state_size, # MODIFICA: Uso batch_size
+            batch_size, 1, self.dim, self.state_size,
             device=self.cached_A.device)
 
     def clean_cached(self):
@@ -67,15 +63,7 @@ class MambaBlock(nn.Module):
         DeltaA = Delta[:, :, :, None] * A[None, None, :, :]
         Abar = torch.exp(DeltaA)
         DeltaB = Delta[:, :, :, None] * B[:, :, None, :]
-
-        # Modifica per stabilità numerica:
-        # Quando DeltaA è vicino a 0, (exp(x)-1)/x approssima 1.
-        # Usiamo torch.nan_to_num o semplicemente evitiamo la divisione critica
         denom = DeltaA + 1e-7
-        # Evita divisione per zero esatta se DeltaA è -1e-7
-        # Una soluzione semplice è usare un epsilon diverso o abs nel denom se x fosse positivo,
-        # ma qui x è negativo. Una fix pratica è non usare il termine additivo se non necessario o aumentarlo.
-        # Soluzione rapida:
         Bbar = (Abar - 1.0) / (denom.abs().clamp(min=1e-10) * denom.sign()) * DeltaB
 
         return Abar, Bbar
@@ -115,9 +103,8 @@ class MambaLayer(nn.Module):
         return y
 
     @torch.no_grad()
-    def inference_start(self, batch_size=1): # MODIFICA: Aggiunto parametro batch_size
-        self.mamba.inference_start(batch_size) # Passo batch_size giù
-        # MODIFICA: Uso batch_size nella creazione di cached_x
+    def inference_start(self, batch_size=1):
+        self.mamba.inference_start(batch_size)
         self.cached_x = torch.zeros(batch_size, self.conv_kernel, self.edim)
 
     @torch.no_grad()

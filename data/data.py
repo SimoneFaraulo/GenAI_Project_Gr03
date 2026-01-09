@@ -4,11 +4,8 @@ import torch
 from torchvision.transforms import v2 as tforms
 from torch.utils.data import DataLoader
 
-IMAGE_SIZE = 64  # Risoluzione richiesta dal progetto (64x64)
+IMAGE_SIZE = 64
 
-# Trasformazioni per CelebA
-# 1. CenterCrop(178): Ritaglia il quadrato centrale dove si trova il volto (standard per CelebA)
-# 2. Resize(IMAGE_SIZE): Ridimensiona a 64x64
 transform = tforms.Compose([
     tforms.ToImage(),
     tforms.CenterCrop(178), 
@@ -16,7 +13,6 @@ transform = tforms.Compose([
     tforms.ToDtype(torch.float32, scale=True)
 ])
 
-# Istanzia il nuovo dataset compatibile con la struttura locale
 try:
     data_set = CelebADataset(DATA_DIRECTORY, transform=transform)
     data_loader = DataLoader(data_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
