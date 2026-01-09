@@ -12,5 +12,7 @@
 /miniset/
 /temp
 /weights/*.ckp
+/weights/*/*.ckp
 .idea/
 .vscode/
+generated_samples/

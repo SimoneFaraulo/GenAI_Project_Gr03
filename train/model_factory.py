@@ -3,8 +3,9 @@ from models.diffusion.diffusion_model import ConditionalDiffusion
 from models.mamba.vision_mamba import VisionMambaModel
 from config.config import MODEL_TYPE
 
-def get_model_from_env():
-    model_type = MODEL_TYPE
+def get_model_from_env(model_type=None):
+    if model_type is None:
+        model_type = MODEL_TYPE
     
     print(f"Factory: Initializing model type '{model_type}'...")
     

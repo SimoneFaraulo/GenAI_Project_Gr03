@@ -42,7 +42,7 @@ HIDDEN_DIMS = parse_int_list("HIDDEN_DIMS", [64, 128, 256, 512])
 LATENT_DIM = int(os.getenv("LATENT_DIM", "128"))
 BETA = float(os.getenv("BETA", "1.0"))
 
-TIME_ENCODING_SIZE = int(os.getenv("TIME_ENCODING_SIZE", "64"))
+TIME_ENCODING_SIZE = int(os.getenv("TIME_ENCODING_SIZE", "256"))
 NOISE_SCHEDULE_L = int(os.getenv("NOISE_SCHEDULE_L", "1000"))
 DIFFUSION_HIDDEN_DIMS = parse_int_list("DIFFUSION_HIDDEN_DIMS", [64, 128, 256, 512, 1024])
 LAMBDA = float(os.getenv("LAMBDA", "3.0"))
