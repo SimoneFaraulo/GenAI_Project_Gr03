@@ -15,25 +15,25 @@ def parse_arguments():
     parser.add_argument('--model', type=str, required=True, choices=['vae', 'diff', 'mamba'],
                         help="Il tipo di modello da utilizzare.")
 
-    parser.add_argument('--all_combos', action='store_true',
+    parser.add_argument('--all_combos', '-A', action='store_true',
                         help="Se attivo, genera una griglia con tutte le 8 combinazioni. Ignora gli attributi singoli.")
 
-    parser.add_argument('--samples_per_combo', type=int, default=1,
+    parser.add_argument('--samples_per_combo', '-spc', type=int, default=1,
                         help="[Solo per --all_combos] Numero di righe (campioni) da generare per ogni colonna (combinazione).")
 
-    parser.add_argument('--male', type=int, choices=[0, 1], help="Genera maschio (1) o femmina (0)")
-    parser.add_argument('--smiling', type=int, choices=[0, 1], help="Genera sorridente (1) o no (0)")
-    parser.add_argument('--young', type=int, choices=[0, 1], help="Genera giovane (1) o no (0)")
+    parser.add_argument('--male', '-M', type=int, choices=[0, 1], help="Genera maschio (1) o femmina (0)")
+    parser.add_argument('--smiling', '-SM', type=int, choices=[0, 1], help="Genera sorridente (1) o no (0)")
+    parser.add_argument('--young', '-Y', type=int, choices=[0, 1], help="Genera giovane (1) o no (0)")
 
-    parser.add_argument('--num_samples', type=int, default=8,
+    parser.add_argument('--num_samples', '-n', type=int, default=8,
                         help="[Solo per modalità Manuale] Numero totale di immagini da generare.")
 
-    parser.add_argument('--temperature', type=float, default=0.0,
+    parser.add_argument('--temperature', '-t', type=float, default=0.0,
                         help="Temperatura di campionamento (usata specificamente per Mamba). "
                              "Per Mamba si consigliano valori molto bassi (es. 0.02). Default: 1.0")
 
     parser.add_argument('--show', action='store_true', help="Mostra i risultati a schermo.")
-    parser.add_argument('--output_dir', type=str, default='./generated_samples', help="Cartella di output.")
+    parser.add_argument('--output_dir', '-o', type=str, default='./generated_samples', help="Cartella di output.")
 
     args = parser.parse_args()
 
