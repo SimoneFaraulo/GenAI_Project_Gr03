@@ -1,3 +1,14 @@
+"""
+Modulo di configurazione globale per il progetto.
+
+Questo script gestisce il caricamento delle variabili d'ambiente necessarie per
+l'inizializzazione del dispositivo, la gestione dei percorsi (dataset, pesi, checkpoint)
+e la definizione degli iperparametri per i modelli (Vae, Diffusion, Mamba).
+Fornisce valori di default per garantire il funzionamento anche in assenza di
+configurazioni specifiche nell'ambiente.
+"""
+
+
 import os
 
 DEVICE = os.getenv("TORCH_DEVICE", "cuda")
@@ -29,6 +40,17 @@ COND_SHAPE = (8,)
 ATTR_EMBED_DIM = int(os.getenv("ATTR_EMBED_DIM", "128"))
 
 def parse_int_list(env_var_name, default_list):
+    """
+    Recupera una variabile d'ambiente e converte la sua stringa separata da virgole
+    in una lista di numeri interi.
+
+    Gestisce eventuali errori di formattazione restituendo la lista di default fornita.
+
+    Args:
+        env_var_name (str): Il nome della variabile d'ambiente da leggere.
+        default_list (list): La lista di interi da utilizzare come fallback se la variabile è vuota, assente o malformata.
+    """
+
     val = os.getenv(env_var_name)
     if val:
         try:
@@ -55,4 +77,12 @@ MAMBA_LAYERS = int(os.getenv("MAMBA_LAYERS", "8"))
 MAMBA_CONV_KERNEL = int(os.getenv("MAMBA_CONV_KERNEL", "4"))
 
 def checkpoint_base(name):
+    """
+    Costruisce il percorso completo per un file di checkpoint combinando la
+    directory base configurata con il nome specificato.
+
+    Args:
+        name (str): Il nome del file o della sottocartella del checkpoint da raggiungere.
+    """
+
     return os.path.join(CHECKPOINT_DIRECTORY, name)
