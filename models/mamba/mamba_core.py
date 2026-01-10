@@ -3,7 +3,20 @@ from torch import nn
 from .pscan import pscan
 
 class MambaBlock(nn.Module):
+    """
+    Implementa il blocco Mamba centrale.
+    Questa classe gestisce la logica del Selective State Space Model (SSM), inclusa la proiezione
+    dei parametri input-dipendenti (B, C, Delta), la discretizzazione dei parametri continui
+    e l'esecuzione della scan parallela o passo-passo.
+    """
     def __init__(self, dim, state_size):
+        """
+        Inizializza i parametri del blocco Mamba, incluse le proiezioni lineari e i parametri SSM.
+
+        Args:
+            dim (int): Dimensione della feature di input (D).
+            state_size (int): Dimensione dello stato latente SSM (N).
+        """
         super().__init__()
         self.dim = dim
         self.state_size = state_size
@@ -21,6 +34,15 @@ class MambaBlock(nn.Module):
         self.softplus = nn.Softplus()
 
     def forward(self, x):
+        """
+        Esegue il passaggio forward standard (training mode) processando l'intera sequenza in parallelo.
+
+        Args:
+            x (torch.Tensor): Tensore di input di dimensione (Batch, Seq_Len, Dim).
+
+        Returns:
+            torch.Tensor: Tensore di output processato (Batch, Seq_Len, Dim).
+        """
         self.clean_cached()
         A = self.computeA()
         B, C, Delta = self.computeBCDelta(x)
@@ -31,17 +53,36 @@ class MambaBlock(nn.Module):
 
     @torch.no_grad()
     def inference_start(self, batch_size=1):
+        """
+        Inizializza la cache necessaria per la generazione autoregressiva (inference mode).
+        Precalcola il parametro A costante e azzera lo stato nascosto h.
+
+        Args:
+            batch_size (int): Dimensione del batch per l'inferenza. Default: 1.
+        """
         self.cached_A = self.computeA()
         self.cached_h = torch.zeros(
             batch_size, 1, self.dim, self.state_size,
             device=self.cached_A.device)
 
     def clean_cached(self):
+        """
+        Pulisce la cache utilizzata durante l'inferenza.
+        """
         self.cached_A = None
         self.cached_h = None
 
     @torch.no_grad()
     def inference_step(self, x):
+        """
+        Esegue un singolo passo di inferenza autoregressiva aggiornando lo stato nascosto corrente.
+
+        Args:
+            x (torch.Tensor): Input del passo corrente (Batch, 1, Dim).
+
+        Returns:
+            torch.Tensor: Output del passo corrente (Batch, 1, Dim).
+        """
         A = self.cached_A
         B, C, Delta = self.computeBCDelta(x)
         Abar, Bbar = self.discretize(Delta, A, B)
@@ -51,15 +92,43 @@ class MambaBlock(nn.Module):
         return y
 
     def computeA(self):
+        """
+        Calcola la matrice discretizzata A basandosi sul parametro logaritmico apprendibile.
+        Mantiene la stabilità numerica lavorando nello spazio logaritmico.
+
+        Returns:
+            torch.Tensor: Il parametro A.
+        """
         return -torch.exp(self.logA)
 
     def computeBCDelta(self, x):
+        """
+        Calcola i parametri dinamici B, C e Delta in funzione dell'input x.
+
+        Args:
+            x (torch.Tensor): Input corrente.
+
+        Returns:
+            tuple: Una tupla contenente i tensori (B, C, Delta).
+        """
         B = self.projB(x)
         C = self.projC(x)
         Delta = self.softplus(self.biasDelta + self.projDelta(x))
         return B, C, Delta
 
     def discretize(self, Delta, A, B):
+        """
+        Converte i parametri continui del sistema dinamico in parametri discreti
+        utilizzando l'approssimazione Zero-Order Hold (ZOH).
+
+        Args:
+            Delta (torch.Tensor): Parametro di passo temporale dinamico.
+            A (torch.Tensor): Parametro di stato continuo.
+            B (torch.Tensor): Parametro di input continuo.
+
+        Returns:
+            tuple: I parametri discretizzati (Abar, Bbar).
+        """
         DeltaA = Delta[:, :, :, None] * A[None, None, :, :]
         Abar = torch.exp(DeltaA)
         DeltaB = Delta[:, :, :, None] * B[:, :, None, :]
@@ -69,14 +138,37 @@ class MambaBlock(nn.Module):
         return Abar, Bbar
 
     def perform_scan(self, Abar, Bbar, x):
+        """
+        Esegue l'operazione di selective scan parallela (prefix scan) per un calcolo efficiente su GPU.
+
+        Args:
+            Abar (torch.Tensor): Parametro di stato discretizzato.
+            Bbar (torch.Tensor): Parametro di input discretizzato.
+            x (torch.Tensor): Input della sequenza.
+
+        Returns:
+            torch.Tensor: Sequenza degli stati nascosti calcolati.
+        """
         Atilde = Abar
         Xtilde = Bbar * x[..., None]
         return pscan(Atilde, Xtilde)
 
 
 class MambaLayer(nn.Module):
-    def __init__(self, dim, state_size, conv_kernel=4,
-                 expansion=1):
+    """
+    Implementa un layer completo Mamba che combina convoluzione locale,
+    il blocco SSM (MambaBlock) e un meccanismo di Gated MLP.
+    """
+    def __init__(self, dim, state_size, conv_kernel=4, expansion=1):
+        """
+        Inizializza il layer Mamba configurando l'espansione delle dimensioni e i layer convoluzionali.
+
+        Args:
+            dim (int): Dimensione del modello in ingresso.
+            state_size (int): Dimensione dello stato interno SSM.
+            conv_kernel (int): Dimensione del kernel per la convoluzione 1D locale. Default: 4.
+            expansion (int): Fattore di espansione per la dimensione interna del blocco. Default: 1.
+        """
         super().__init__()
         edim = int(dim * expansion)
         self.dim = dim
@@ -92,6 +184,15 @@ class MambaLayer(nn.Module):
         self.proj_3 = nn.Linear(edim, dim)
 
     def forward(self, x):
+        """
+        Passaggio forward che applica proiezione, convoluzione, attivazione, blocco SSM e gating.
+
+        Args:
+            x (torch.Tensor): Input del layer (Batch, Seq_Len, Dim).
+
+        Returns:
+            torch.Tensor: Output del layer (Batch, Seq_Len, Dim).
+        """
         ex = self.proj_1(x)
         ex = self.do_conv(ex)
         ex = self.activation(ex)
@@ -104,11 +205,28 @@ class MambaLayer(nn.Module):
 
     @torch.no_grad()
     def inference_start(self, batch_size=1):
+        """
+        Prepara il layer per l'inferenza inizializzando sia il MambaBlock interno
+        sia il buffer per la convoluzione causale.
+
+        Args:
+            batch_size (int): Dimensione del batch. Default: 1.
+        """
         self.mamba.inference_start(batch_size)
         self.cached_x = torch.zeros(batch_size, self.conv_kernel, self.edim)
 
     @torch.no_grad()
     def inference_step(self, x):
+        """
+        Esegue un passo di inferenza gestendo manualmente il buffer della convoluzione
+        e chiamando il passo del blocco Mamba interno.
+
+        Args:
+            x (torch.Tensor): Input corrente (Batch, 1, Dim).
+
+        Returns:
+            torch.Tensor: Output calcolato.
+        """
         if self.cached_x.device != x.device:
             self.cached_x = self.cached_x.to(device=x.device)
 
@@ -123,6 +241,17 @@ class MambaLayer(nn.Module):
         return y
 
     def do_conv(self, x, inference=False):
+        """
+        Esegue la convoluzione causale 1D. Durante l'inferenza gestisce un buffer scorrevole
+        per simulare la convoluzione passo dopo passo senza accesso al futuro.
+
+        Args:
+            x (torch.Tensor): Input da convolvere.
+            inference (bool): Flag per indicare se siamo in modalità generazione. Default: False.
+
+        Returns:
+            torch.Tensor: Risultato della convoluzione.
+        """
         if inference:
             ck = self.conv_kernel
             ed = self.edim
@@ -137,17 +266,53 @@ class MambaLayer(nn.Module):
         return y
 
 class ResidualMambaLayer(nn.Module):
-    def __init__(self, dim, state_size, conv_kernel=4,
-                 expansion=1):
+    """
+    Wrapper che applica una connessione residua e la normalizzazione (RMSNorm/LayerNorm)
+    attorno al MambaLayer.
+    """
+    def __init__(self, dim, state_size, conv_kernel=4, expansion=1):
+        """
+        Inizializza il blocco residuo componendo il MambaLayer e la LayerNorm.
+
+        Args:
+            dim (int): Dimensione del modello.
+            state_size (int): Dimensione dello stato SSM.
+            conv_kernel (int): Kernel della convoluzione interna. Default: 4.
+            expansion (int): Fattore di espansione. Default: 1.
+        """
         super().__init__()
         self.mamba = MambaLayer(dim, state_size, conv_kernel, expansion)
         self.norm = nn.LayerNorm(dim)
 
     def forward(self, x):
+        """
+        Applica la normalizzazione, il layer Mamba e somma l'input originale (skip connection).
+
+        Args:
+            x (torch.Tensor): Input del blocco.
+
+        Returns:
+            torch.Tensor: Output con residuo sommato.
+        """
         return x + self.mamba(self.norm(x))
 
-    def inference_start(self, batch_size=1): # MODIFICA: Aggiunto parametro
-        self.mamba.inference_start(batch_size) # Passo batch_size
+    def inference_start(self, batch_size=1):
+        """
+        Propaga il segnale di inizio inferenza al layer Mamba sottostante.
+
+        Args:
+            batch_size (int): Dimensione del batch. Default: 1.
+        """
+        self.mamba.inference_start(batch_size)
 
     def inference_step(self, x):
+        """
+        Esegue un passo di inferenza applicando normalizzazione, MambaLayer e connessione residua.
+
+        Args:
+            x (torch.Tensor): Input del passo corrente.
+
+        Returns:
+            torch.Tensor: Output del passo corrente.
+        """
         return x + self.mamba.inference_step(self.norm(x))

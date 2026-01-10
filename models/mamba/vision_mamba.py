@@ -6,7 +6,18 @@ from .mamba_core import ResidualMambaLayer
 
 
 class VisionMambaModel(nn.Module):
+    """
+    Modello VisionMamba per la generazione condizionale di immagini.
+    Questa architettura tratta l'immagine come una sequenza di patch e utilizza
+    blocchi Mamba (SSM) per modellare le dipendenze globali in modo autoregressivo,
+    permettendo la generazione pixel-per-pixel (o patch-per-patch) guidata da attributi.
+    """
     def __init__(self):
+        """
+        Inizializza i componenti del modello: embeddings per patch e attributi,
+        embedding posizionale assoluto, stack di layer Mamba residui e testa di proiezione finale.
+        I parametri dimensionali sono recuperati dal file di configurazione globale.
+        """
         super().__init__()
 
         self.patch_size = MAMBA_PATCH_SIZE
@@ -38,6 +49,19 @@ class VisionMambaModel(nn.Module):
         self.output_head = nn.Linear(self.dim, self.pixels_per_patch)
 
     def forward(self, x, cond):
+        """
+        Esegue il passaggio forward per il training.
+        Costruisce la sequenza di input concatenando l'embedding della condizione (attributi)
+        con gli embedding dei patch dell'immagine, aggiunge le informazioni posizionali
+        e processa il tutto attraverso i layer Mamba.
+
+        Args:
+            x (torch.Tensor): Batch di immagini reali (Batch, Channels, Height, Width).
+            cond (torch.Tensor): Batch di vettori attributo (Batch, Attr_Dim).
+
+        Returns:
+            torch.Tensor: Logits predetti per il patch successivo (Batch, Seq_Len, Pixels_Per_Patch).
+        """
         x_emb = self.patch_embedding(x)
 
         x_seq = x_emb.flatten(2).transpose(1, 2)
@@ -56,6 +80,18 @@ class VisionMambaModel(nn.Module):
         return logits[:, :-1, :]
 
     def loss_function(self, pred_patches, real_imgs):
+        """
+        Calcola la Mean Squared Error (MSE) loss tra i patch predetti e quelli reali.
+        La funzione si occupa di "srotolare" (unfold) le immagini originali in una sequenza
+        di patch vettorializzati per renderle confrontabili con l'output del modello.
+
+        Args:
+            pred_patches (torch.Tensor): Tensore dei patch generati dal modello.
+            real_imgs (torch.Tensor): Immagini target originali.
+
+        Returns:
+            torch.Tensor: Valore scalare della loss.
+                """
         B = real_imgs.shape[0]
 
         target_patches = real_imgs.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
@@ -70,6 +106,21 @@ class VisionMambaModel(nn.Module):
 
     @torch.no_grad()
     def sample(self, num_samples, device, cond=None):
+        """
+        Esegue la generazione autoregressiva (inferenza).
+        Inizia processando il token di condizione, poi genera l'immagine patch dopo patch,
+        utilizzando l'output predittivo di un passo come input per il passo successivo.
+        Utilizza la cache dei layer Mamba per un'inferenza efficiente.
+
+        Args:
+            num_samples (int): Numero di immagini da generare.
+            device (torch.device): Dispositivo su cui eseguire i calcoli.
+            cond (torch.Tensor, optional): Attributi specifici per condizionare la generazione.
+                                          Se None, vengono generati attributi casuali.
+
+        Returns:
+            torch.Tensor: Batch di immagini ricostruite (Batch, Channels, Height, Width).
+        """
         self.eval()
 
         if cond is None:
@@ -111,12 +162,23 @@ class VisionMambaModel(nn.Module):
         self.train()
         return recon_img
     
-    def mamba_train_step(model, batch, device):
+    def mamba_train_step(self, batch, device):
+        """
+        Metodo di utilità statica per eseguire un singolo passo di training.
+        Gestisce il passaggio dei dati al dispositivo, il forward pass e il calcolo della loss.
+
+        Args:
+            batch (tuple): Una tupla contenente (immagini, attributi).
+            device (torch.device): Dispositivo di calcolo.
+
+        Returns:
+            tuple: Una tupla contenente (loss, dizionario delle metriche).
+        """
         images, attributes = batch
         images = images.to(device)
         attributes = attributes.to(device)
-        pred_patches = model(images, attributes)
-        loss = model.loss_function(pred_patches, images)
+        pred_patches = self(images, attributes)
+        loss = self.loss_function(pred_patches, images)
         metrics = {
             'mse': loss.item()
         }
@@ -124,4 +186,14 @@ class VisionMambaModel(nn.Module):
         return loss, metrics
     
     def train_step_fn(self, batch, device):
+        """
+        Wrapper di istanza che richiama la logica di training definita in mamba_train_step.
+
+        Args:
+            batch (tuple): Batch di dati corrente.
+            device (torch.device): Dispositivo di calcolo.
+
+        Returns:
+            tuple: Risultato dello step di training (loss, metrics).
+        """
         return self.mamba_train_step(batch, device)
