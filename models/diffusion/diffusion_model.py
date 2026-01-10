@@ -271,16 +271,17 @@ class ConditionalDiffusion(nn.Module):
         return loss
 
     @torch.no_grad()
-    def sample(self, num_samples, device, cond=None, lam=LAMBDA):
+    def sample(self, num_samples, device, cond=None, lam=LAMBDA, steps=NOISE_SCHEDULE_L, eta=1.0):
         """
-        Esegue il processo di diffusione inversa (denoising). Parte da rumore gaussiano puro
-        e iterativamente rimuove il rumore per generare immagini condizionate dagli attributi.
+        Esegue il processo di generazione usando l'algoritmo DDIM.
         
         Args:
             num_samples (int): Numero di immagini da generare.
             device (torch.device): Dispositivo di esecuzione.
-            cond (torch.Tensor, optional): Attributi specifici per la generazione. Se None, vengono generati random.
-            lam (float): Coefficiente di "guidance" (CFG). >1 aumenta l'aderenza alla condizione.
+            cond (torch.Tensor, optional): Attributi specifici. Se None, vengono generati random.
+            lam (float): Coefficiente di "guidance" (CFG).
+            steps (int): Numero di passi DDIM (default: NOISE_SCHEDULE_L (DDPM)).
+            eta (float): Parametro di stocasticità (1.0 = DDPM (default), 0.0 = deterministico/DDIM).
 
         Returns:
             torch.Tensor: Batch di immagini generate [num_samples, Channels, H, W].
@@ -291,34 +292,66 @@ class ConditionalDiffusion(nn.Module):
         cond0 = torch.zeros_like(cond).to(device)
 
         n = num_samples
+        # Genera z_N ~ N(0, I)
         z = torch.randn(n, self.channels, self.img_size, self.img_size, device=device)
         was_training = self.training
         self.eval()
 
-        for kt in reversed(range(self.noise_schedule.schedule_len)):
-            t = torch.tensor(kt, device=device).view(1).expand(n)
-            beta = self.noise_schedule.beta[kt]
-            sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[kt]
-            sqrt_1_beta = self.noise_schedule.sqrt_1_beta[kt]
-            sqrt_beta = self.noise_schedule.sqrt_beta[kt]
+        # Selezione lineare dei passi temporali (sottoinsieme tau)
+        # steps valori equidistanti tra 0 e schedule_len-1
+        tau_seq = torch.linspace(0, self.noise_schedule.schedule_len - 1, steps, dtype=torch.long, device=device)
 
+        # Loop inverso sui passi selezionati: i da steps-1 a 0
+        for i in reversed(range(steps)):
+            tau_curr = tau_seq[i]
+            # Il passo precedente è l'indice successivo nella sequenza inversa (i-1), 
+            # se siamo all'ultimo step (i=0) il precedente è "tempo -1" (che corrisponde a t<0).
+            tau_prev = tau_seq[i-1] if i > 0 else -1
+
+            # t deve essere un batch per il forward del modello
+            t = tau_curr.view(1).expand(n)
+
+            # Predizione del rumore con Classifier-Free Guidance
             g1 = self(z, t, cond)
             g0 = self(z, t, cond0)
-
             g = lam * g1 + (1 - lam) * g0
 
-            mu = (z - beta / sqrt_1_alpha * g) / sqrt_1_beta
-
-            if kt > 0:
-                eps = torch.randn_like(z)
-                z = mu + sqrt_beta * eps
-            else:
-                z = mu
+            # Calcolo del passo DDIM
+            z = self.ddim_step(z, g, eta, tau_curr, tau_prev)
 
         if was_training:
             self.train()
 
         return z
+    
+    def ddim_step(self, zt, g, eta, tau_curr, tau_prev):
+        """
+        Esegue un singolo passo di aggiornamento DDIM.
+        Calcola z_{tau_prev} partendo da z_{tau_curr} e dal rumore predetto g.
+        """
+        # Recupera alpha_curr
+        a_curr = self.noise_schedule.alpha[tau_curr]
+        
+        # Recupera alpha_prev (gestendo il caso tau_prev < 0 -> alpha = 1.0)
+        if tau_prev >= 0:
+            a_prev = self.noise_schedule.alpha[tau_prev]
+        else:
+            a_prev = torch.tensor(1.0, device=zt.device)
+        
+        # Calcolo sigma
+        sigma = eta * torch.sqrt((1.0 - a_prev) / (1.0 - a_curr) * (1.0 - a_curr / a_prev))
+        
+        # Calcolo coefficienti c1 e c2
+        c1 = torch.sqrt(a_prev / a_curr)
+        c2 = torch.sqrt(1.0 - a_prev - sigma**2) - torch.sqrt(a_prev * (1.0 - a_curr) / a_curr)
+        
+        # Rumore casuale per il passo stocastico (se eta > 0)
+        eps = torch.randn_like(zt)
+        
+        # Aggiornamento latente
+        z_prev = c1 * zt + c2 * g + sigma * eps
+        
+        return z_prev
     
     def diffusion_train_step(self, batch, device):
         """

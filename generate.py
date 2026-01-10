@@ -3,7 +3,7 @@ import os
 import sys
 import torch
 import time
-from config.config import DEVICE, WEIGHTS_DIRECTORY
+from config.config import DEVICE, NOISE_SCHEDULE_L, WEIGHTS_DIRECTORY
 from utility.checkpoint_manager import CheckpointManager
 from utility.show_utils import save_images, show_images
 from train.model_factory import get_model_from_env
@@ -50,6 +50,10 @@ def parse_arguments():
 
     parser.add_argument('--show', action='store_true', help="Mostra i risultati a schermo.")
     parser.add_argument('--output_dir', '-o', type=str, default='./generated_samples', help="Cartella di output.")
+    parser.add_argument('--steps', type=int, default=NOISE_SCHEDULE_L, 
+                        help="[solo per model='diff'] Numero di passi di campionamento DDIM. Default: NOISE_SCHEDULE_L.")
+    parser.add_argument('--eta', type=float, default=1.0, 
+                        help="[solo per model='diff'] Parametro di stocasticità DDIM (1.0 = DDPM (default), 0.0 = deterministico/DDIM).")
 
     args = parser.parse_args()
 
@@ -147,6 +151,9 @@ def main():
 
     if args.model == 'mamba':
         print(f"Temperatura impostata: {args.temperature}")
+    elif args.model == 'diff':
+        print(f"Eta impostata: {args.eta}")
+        print(f"Steps impostati: {args.steps}")
 
     try:
         model, exp_name_prefix = get_model_from_env(args.model)
@@ -186,6 +193,9 @@ def main():
             kwargs = {}
             if args.model == 'mamba':
                 kwargs['temperature'] = args.temperature
+            elif args.model == 'diff':
+                kwargs['steps'] = args.steps
+                kwargs['eta'] = args.eta
 
             generated_images = model.sample(cond.shape[0], DEVICE, cond=cond, **kwargs)
 
