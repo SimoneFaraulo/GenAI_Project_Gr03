@@ -112,6 +112,19 @@ IMPORTANT: The class is not thread-safe.
 
 
     def load_any_checkpoint(self, **kwargs):
+        """
+        Cerca automaticamente e carica il checkpoint più recente presente nella cartella designata.
+        Scansiona la directory filtrando i file per l'estensione configurata, li ordina in base
+        alla data di ultima modifica e restituisce il contenuto dell'ultimo salvataggio.
+
+        Args:
+            **kwargs: Argomenti arbitrari passati direttamente alla funzione torch.load
+                      (es. map_location, weights_only, etc.).
+
+        Returns:
+            Any | None: Il contenuto del checkpoint caricato (es. dict, model state) oppure None
+                        se nessun file compatibile viene trovato.
+        """
         candidates = []
         for name in os.listdir(self.folder):
             if os.path.normcase(name).endswith(CHECKPOINT_EXTENSION):
