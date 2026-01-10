@@ -32,15 +32,3 @@ except Exception as e:
     print(f"Errore nel caricamento del dataset: {e}")
     data_set = []
     data_loader = None
-
-def grayscale(img_tensor, output_channels=1):
-    """
-    Converte un tensore di immagini RGB in scala di grigi utilizzando le trasformazioni
-    funzionali di torchvision.
-
-    Args:
-        img_tensor (torch.Tensor): Il tensore dell'immagine di input (solitamente C x H x W).
-        output_channels (int): Il numero di canali dell'immagine in uscita (default: 1).
-    """
-
-    return tforms.functional.rgb_to_grayscale(img_tensor, output_channels)
