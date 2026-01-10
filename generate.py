@@ -8,8 +8,24 @@ from utility.checkpoint_manager import CheckpointManager
 from utility.show_utils import save_images, show_images
 from train.model_factory import get_model_from_env
 
+"""
+Script di generazione unificato per i diversi modelli (VAE, Diffusion, Mamba).
+Permette di generare immagini sintetiche in due modalità:
+1. Manuale: specificando gli attributi (Male, Smiling, Young) da riga di comando.
+2. Grid: generando automaticamente una griglia con tutte le combinazioni possibili di attributi.
+Gestisce il caricamento dei pesi, l'inferenza e il salvataggio dei risultati.
+"""
 
 def parse_arguments():
+    """
+    Configura e gestisce il parsing degli argomenti da riga di comando.
+    Definisce i flag per la scelta del modello, la modalità di generazione (griglia vs manuale)
+    e i parametri specifici per l'inferenza (es. temperatura).
+    Esegue validazioni per assicurare che gli attributi siano coerenti con la modalità scelta.
+
+    Returns:
+        argparse.Namespace: L'oggetto contenente tutti i parametri parsati.
+    """
     parser = argparse.ArgumentParser(description="Script di Generazione Unificato (Singolo o Griglia)")
 
     parser.add_argument('--model', type=str, required=True, choices=['vae', 'diff', 'mamba'],
@@ -49,6 +65,19 @@ def parse_arguments():
 
 
 def prepare_grid_data(samples_per_combo, device):
+    """
+    Prepara i vettori di condizione per generare una griglia completa di tutte le combinazioni.
+    Dati 3 attributi binari, genera le 8 (2^3) combinazioni possibili.
+
+    Args:
+        samples_per_combo (int): Quante immagini generare per ogni singola combinazione.
+        device (torch.device): Il dispositivo su cui allocare i tensori.
+
+    Returns:
+        tuple: Una tupla contenente:
+               - cond (torch.Tensor): Tensore delle condizioni normalizzate in [-1, 1].
+               - labels (list): Lista di stringhe descrittive per ogni colonna/combinazione.
+    """
     combinations = [
         [0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1],
         [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]
@@ -70,6 +99,20 @@ def prepare_grid_data(samples_per_combo, device):
 
 
 def prepare_manual_data(num_samples, args, device):
+    """
+    Prepara un batch di vettori di condizione identici basati sugli input dell'utente.
+    Usato quando si vuole generare un set di immagini con attributi specifici fissati.
+
+    Args:
+        num_samples (int): Numero totale di immagini da generare.
+        args (argparse.Namespace): Argomenti parsati contenenti i flag degli attributi.
+        device (torch.device): Il dispositivo su cui allocare i tensori.
+
+    Returns:
+        tuple: Una tupla contenente:
+               - cond (torch.Tensor): Tensore delle condizioni normalizzate in [-1, 1].
+               - label (str): Una stringa che descrive la combinazione scelta (per il nome file).
+    """
     cond = torch.zeros((num_samples, 3), device=device)
     cond[:, 0] = float(args.male)
     cond[:, 1] = float(args.smiling)
@@ -87,6 +130,15 @@ def prepare_manual_data(num_samples, args, device):
 
 
 def main():
+    """
+    Funzione principale di orchestrazione.
+    1. Inizializza il modello richiesto (VAE, Diff o Mamba).
+    2. Cerca e carica l'ultimo checkpoint disponibile.
+    3. Prepara i dati di input (condizioni) in base alla modalità scelta.
+    4. Esegue l'inferenza (sample).
+    5. Formatta, salva e opzionalmente visualizza le immagini generate.
+    """
+
     args = parse_arguments()
 
     print(f"--- Avvio Generazione: {args.model.upper()} ---")

@@ -117,6 +117,9 @@ class VisionMambaModel(nn.Module):
             device (torch.device): Dispositivo su cui eseguire i calcoli.
             cond (torch.Tensor, optional): Attributi specifici per condizionare la generazione.
                                           Se None, vengono generati attributi casuali.
+            temperature (float): Fattore di scala per il rumore gaussiano aggiunto alla predizione
+                                 di ogni patch prima del passo successivo.
+                                 Un valore > 0 introduce variabilità. Default: 0.0.
 
         Returns:
             torch.Tensor: Batch di immagini ricostruite (Batch, Channels, Height, Width).
