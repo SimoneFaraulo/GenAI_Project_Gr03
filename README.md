@@ -131,7 +131,7 @@ python generate.py --model diff --all_combos --samples_per_combo 2
 
 A symmetric Encoder-Decoder architecture with convolutional layers and residual connections (Skip Connections).
 
-* **Encoder**: Compresses the image and attributes into a latent space parameterized by mean ($\bm\mu$) and variance ($\bm\sigma$).
+* **Encoder**: Compresses the image and attributes into a latent space parameterized by mean ($\mu$) and variance ($\sigma$).
 * **Decoder**: Reconstructs the image starting from the sampled latent vector and attributes.
 
 ### 2. Conditional Diffusion (DDPM)
