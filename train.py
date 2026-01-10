@@ -9,6 +9,14 @@ from train.model_factory import get_model_from_env
 
 
 def main():
+    """
+    Entry point principale dello script di addestramento.
+    Configura l'ambiente di training, inizializza il modello e l'ottimizzatore,
+    gestisce i checkpoint e avvia il ciclo di addestramento supervisionato dal Trainer.
+
+    Non accetta argomenti espliciti, ma utilizza le variabili globali importate
+    dal modulo di configurazione (config.py).
+    """
     epochs = EPOCHS
 
     try:
