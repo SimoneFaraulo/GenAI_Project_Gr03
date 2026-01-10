@@ -110,6 +110,23 @@ IMPORTANT: The class is not thread-safe.
         fname=lst[-1][1]
         return torch.load(fname, **kwargs)
 
+
+    def load_any_checkpoint(self, **kwargs):
+        candidates = []
+        for name in os.listdir(self.folder):
+            if os.path.normcase(name).endswith(CHECKPOINT_EXTENSION):
+                candidates.append(name)
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: os.path.getmtime(os.path.join(self.folder, x)))
+        last_checkpoint_name = candidates[-1]
+        full_path = os.path.join(self.folder, last_checkpoint_name)
+
+        return torch.load(full_path, **kwargs)
+
+
     def save_checkpoint(self, data):
         '''Saves a new checkpoint, using torch.save to store the
            checkpoint data. If, after a successful saving, the number

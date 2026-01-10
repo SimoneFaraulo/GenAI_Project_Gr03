@@ -105,7 +105,7 @@ class VisionMambaModel(nn.Module):
         return loss
 
     @torch.no_grad()
-    def sample(self, num_samples, device, cond=None):
+    def sample(self, num_samples, device, cond=None, temperature=0.0):
         """
         Esegue la generazione autoregressiva (inferenza).
         Inizia processando il token di condizione, poi genera l'immagine patch dopo patch,
@@ -143,18 +143,22 @@ class VisionMambaModel(nn.Module):
         generated_patches = []
         generated_patches.append(next_patch_pred)
         for i in range(self.seq_len - 1):
-            prev_patch_img = next_patch_pred.view(B, self.img_channels, self.patch_size, self.patch_size)
+            noise = torch.randn_like(next_patch_pred) * temperature
+            patch_input_for_next_step = next_patch_pred + noise
+            prev_patch_img = patch_input_for_next_step.view(B, self.img_channels, self.patch_size, self.patch_size)
             patch_emb = self.patch_embedding(prev_patch_img)
+
             curr_input = patch_emb.view(B, 1, self.dim)
             curr_input = curr_input + self.pos_embedding[:, i + 1:i + 2, :]
 
             for layer in self.layers:
                 curr_input = layer.inference_step(curr_input)
-
             next_patch_pred = self.output_head(curr_input)
+
             generated_patches.append(next_patch_pred)
 
         full_seq = torch.cat(generated_patches, dim=1)
+
         full_seq = full_seq.view(B, self.h_patches, self.w_patches, self.img_channels, self.patch_size, self.patch_size)
         full_seq = full_seq.permute(0, 3, 1, 4, 2, 5)
         recon_img = full_seq.contiguous().view(B, self.img_channels, IMG_SIZE, IMG_SIZE)

@@ -28,6 +28,10 @@ def parse_arguments():
     parser.add_argument('--num_samples', type=int, default=8,
                         help="[Solo per modalità Manuale] Numero totale di immagini da generare.")
 
+    parser.add_argument('--temperature', type=float, default=0.0,
+                        help="Temperatura di campionamento (usata specificamente per Mamba). "
+                             "Per Mamba si consigliano valori molto bassi (es. 0.02). Default: 1.0")
+
     parser.add_argument('--show', action='store_true', help="Mostra i risultati a schermo.")
     parser.add_argument('--output_dir', type=str, default='./generated_samples', help="Cartella di output.")
 
@@ -89,6 +93,9 @@ def main():
     mode_str = "Griglia Completa (Colonne)" if args.all_combos else "Manuale"
     print(f"Modalità: {mode_str}")
 
+    if args.model == 'mamba':
+        print(f"Temperatura impostata: {args.temperature}")
+
     try:
         model, exp_name_prefix = get_model_from_env(args.model)
         model = model.to(DEVICE)
@@ -108,7 +115,7 @@ def main():
 
     print(f"Loading checkpoint from: {full_checkpoint_path}")
     cpm = CheckpointManager(folder=full_checkpoint_path)
-    state = cpm.load_last_checkpoint(map_location=DEVICE)
+    state = cpm.load_any_checkpoint(map_location=DEVICE)
     if not state:
         print("ERRORE: Nessun file .ckp valido trovato.")
         sys.exit(1)
@@ -124,7 +131,12 @@ def main():
     start = time.time()
     with torch.no_grad():
         try:
-            generated_images = model.sample(cond.shape[0], DEVICE, cond=cond)
+            kwargs = {}
+            if args.model == 'mamba':
+                kwargs['temperature'] = args.temperature
+
+            generated_images = model.sample(cond.shape[0], DEVICE, cond=cond, **kwargs)
+
         except RuntimeError as e:
             if "out of memory" in str(e):
                 print("ERRORE: GPU OOM. Riduci il numero di sample.")
