@@ -108,7 +108,7 @@ IMPORTANT: The class is not thread-safe.
             return None
         self.sort_checkpoint_list(lst)
         fname=lst[-1][1]
-        return torch.load(fname, **kwargs)
+        return torch.load(fname, weights_only=False, **kwargs)
 
 
     def load_any_checkpoint(self, **kwargs):
@@ -137,7 +137,7 @@ IMPORTANT: The class is not thread-safe.
         last_checkpoint_name = candidates[-1]
         full_path = os.path.join(self.folder, last_checkpoint_name)
 
-        return torch.load(full_path, **kwargs)
+        return torch.load(full_path,weights_only=False,**kwargs)
 
 
     def save_checkpoint(self, data):
