@@ -21,21 +21,21 @@ class EncoderBlock(nn.Module):
 
         super().__init__()
         self.downsample = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1), # dimezza H e W
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(0.2, inplace=True)
         )
 
         hidden_dim = out_channels // 2
 
-        self.residual = Skip(
-            nn.Conv2d(out_channels, hidden_dim, kernel_size=1, stride=1, padding=0),
+        self.residual = Skip( 
+            nn.Conv2d(out_channels, hidden_dim, kernel_size=1, stride=1, padding=0), # shape inalterata
             nn.BatchNorm2d(hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),   # shape inalterata
             nn.BatchNorm2d(hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(hidden_dim, out_channels, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(hidden_dim, out_channels, kernel_size=1, stride=1, padding=0), # shape inalterata
             nn.BatchNorm2d(out_channels),
         )
         
@@ -56,7 +56,7 @@ class EncoderBlock(nn.Module):
         x = self.residual(x)
         x = self.final_activation(x)
 
-        return x 
+        return x  # [B, out_C, H/2, W/2]
 
 class DecoderBlock(nn.Module):
     """
@@ -75,21 +75,21 @@ class DecoderBlock(nn.Module):
 
         super().__init__()
         self.upsample = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1), # raddoppia W e H
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(0.2, inplace=True)
         )
         
         hidden_dim = out_channels // 2
         self.residual = Skip(
-            nn.Conv2d(out_channels, hidden_dim, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(out_channels, hidden_dim, kernel_size=1, stride=1, padding=0),  # shape inalterata
             nn.BatchNorm2d(hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(0.1),
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),  # shape inalterata
             nn.BatchNorm2d(hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(hidden_dim, out_channels, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(hidden_dim, out_channels, kernel_size=1, stride=1, padding=0),  # shape inalterata
             nn.BatchNorm2d(out_channels)
         )
         
@@ -110,7 +110,7 @@ class DecoderBlock(nn.Module):
         x = self.residual(x)
         x = self.final_activation(x)
 
-        return x
+        return x # [B, out_C, 2H, 2W]
 
 class Encoder(nn.Module):
     """
@@ -133,8 +133,8 @@ class Encoder(nn.Module):
         """
 
         super().__init__()
-        if hidden_dims is None: hidden_dims = HIDDEN_DIMS
-        current_channels = in_channels + ATTR_EMBED_DIM
+        if hidden_dims is None: hidden_dims = HIDDEN_DIMS # Default: [64, 128, 256, 512]
+        current_channels = in_channels + ATTR_EMBED_DIM # all'inizio 3 + 128 = 131
         
         modules = []
         for h_dim in hidden_dims:
@@ -143,13 +143,14 @@ class Encoder(nn.Module):
 
         self.encoder_net = nn.Sequential(*modules)
 
+        # 64 -> 32 -> 16 -> 8 -> 4
         num_downsamples = len(hidden_dims)
         self.final_spatial_dim = IMG_SIZE // (2 ** num_downsamples)
         
         if self.final_spatial_dim < 1:
             raise ValueError(f"Troppi layer ({num_downsamples}) per una immagine {IMG_SIZE}x{IMG_SIZE}. La risoluzione collassa a 0.")
 
-        self.flatten_dim = hidden_dims[-1] * self.final_spatial_dim * self.final_spatial_dim
+        self.flatten_dim = hidden_dims[-1] * self.final_spatial_dim * self.final_spatial_dim # 512 * 4 * 4 = 8192
         
         self.fc_mu = nn.Linear(self.flatten_dim, latent_dim)
         self.fc_var = nn.Linear(self.flatten_dim, latent_dim)
@@ -174,7 +175,7 @@ class Encoder(nn.Module):
         x = self.encoder_net(x)
         x = torch.flatten(x, start_dim=1)
 
-        return self.fc_mu(x), self.fc_var(x)
+        return self.fc_mu(x), self.fc_var(x) # [B, latent_dim (512)]
 
 class Decoder(nn.Module):
     """
@@ -195,30 +196,30 @@ class Decoder(nn.Module):
         """
 
         super().__init__()
-        if hidden_dims is None: hidden_dims = HIDDEN_DIMS[::-1]
+        if hidden_dims is None: hidden_dims = HIDDEN_DIMS[::-1] # inversa: [512, 256, 128, 64]
             
-        self.initial_reshape_dim = hidden_dims[0]
+        self.initial_reshape_dim = hidden_dims[0] # 512
         
         num_upsamples = len(hidden_dims)
         self.start_spatial_dim = IMG_SIZE // (2 ** num_upsamples)
         
         self.decoder_input = nn.Linear(
-            latent_dim + ATTR_EMBED_DIM, 
-            self.initial_reshape_dim * self.start_spatial_dim * self.start_spatial_dim
+            latent_dim + ATTR_EMBED_DIM, # 512 + 128 = 640
+            self.initial_reshape_dim * self.start_spatial_dim * self.start_spatial_dim # 512 * 4 * 4 = 8192
         )
         
         modules = []
         for i in range(len(hidden_dims) - 1):
-            modules.append(DecoderBlock(hidden_dims[i], hidden_dims[i+1]))
+            modules.append(DecoderBlock(hidden_dims[i], hidden_dims[i+1])) # 512 -> 256 -> 128 -> 64 canali 
             
         self.decoder_net = nn.Sequential(*modules)
 
         self.final_layer = nn.Sequential(
-            nn.ConvTranspose2d(hidden_dims[-1], hidden_dims[-1], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(hidden_dims[-1], hidden_dims[-1], kernel_size=3, stride=2, padding=1, output_padding=1), # 64x32x32 -> 64x64x64
             nn.BatchNorm2d(hidden_dims[-1]),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(hidden_dims[-1], out_channels, kernel_size=3, stride=1, padding=1),
-            nn.Sigmoid() 
+            nn.Conv2d(hidden_dims[-1], out_channels, kernel_size=3, stride=1, padding=1), # 3x64x64
+            nn.Sigmoid() # per valori in [0, 1] perché le immagini sono normalizzate
         )
 
     def forward(self, z, cond_emb):
@@ -238,12 +239,12 @@ class Decoder(nn.Module):
         z_cond = torch.cat([z, cond_emb], dim=1)
 
         x = self.decoder_input(z_cond)
-        x = x.view(-1, self.initial_reshape_dim, self.start_spatial_dim, self.start_spatial_dim)
+        x = x.view(-1, self.initial_reshape_dim, self.start_spatial_dim, self.start_spatial_dim) # [B, 8192] -> [B, 512, 4, 4]
         
         x = self.decoder_net(x)
         x = self.final_layer(x)
         
-        return x
+        return x # [B, 3, 64, 64]
 
 class ConditionalVAE(nn.Module):
     """
@@ -260,7 +261,7 @@ class ConditionalVAE(nn.Module):
 
         super().__init__()
         self.attr_embed = nn.Sequential(
-            nn.Linear(ATTR_DIM, ATTR_EMBED_DIM),
+            nn.Linear(ATTR_DIM, ATTR_EMBED_DIM), # 3 -> 128
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(ATTR_EMBED_DIM, ATTR_EMBED_DIM),
         )
@@ -320,11 +321,13 @@ class ConditionalVAE(nn.Module):
         Returns:
             tuple: (loss_totale, valore_recon_loss, valore_kl_loss)
         """
-
+        # reduction='sum' somma l'errore su tutti i pixel e i sample del batch per bilanciare la scala rispetto alla KL anch'essa una somma
         recon_loss = F.mse_loss(recon_x, x, reduction='sum')
         kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+        
+        elbo_loss = recon_loss + beta * kl_loss
 
-        return recon_loss + beta * kl_loss, recon_loss, kl_loss
+        return elbo_loss, recon_loss, kl_loss
 
     @torch.no_grad()
     def sample(self, num_samples, device, cond=None):
@@ -344,7 +347,7 @@ class ConditionalVAE(nn.Module):
         z = torch.randn(num_samples, LATENT_DIM).to(device)
         if cond is None:
             cond = torch.randint(0, 2, (num_samples, ATTR_DIM)).float().to(device)
-            cond = (cond * 2) - 1
+            cond = (cond * 2) - 1 # [0, 1] -> [-1, 1]
         else:
             cond = cond.to(device)
 
