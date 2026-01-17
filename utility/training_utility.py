@@ -63,9 +63,8 @@ def save_snapshot(model, dataset, folder, epoch_count, device, num_samples=8):
             # Questo permette di confrontare:
             # "Reale (Uomo)" vs "Generato (Uomo)"
             # Nota: Non passiamo real_imgs, perché il diffusion parte dal rumore.
-            if hasattr(model, 'sample') and callable(model.sample):
-                gen_imgs = model.sample(num_samples=num_samples, device=device, cond=attrs)
-                rows_to_save.append(gen_imgs.cpu()) # Riga 3 (o 2): Generazione
+            gen_imgs = model.sample(num_samples=num_samples, device=device, cond=attrs)
+            rows_to_save.append(gen_imgs.cpu()) # Riga 3 (o 2): Generazione
 
 
         # Salvataggio immagine:

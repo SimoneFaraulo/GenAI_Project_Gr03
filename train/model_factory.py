@@ -26,7 +26,7 @@ def get_model_from_env(model_type=None):
     if model_type == 'vae':
         return ConditionalVAE(), "vae_celeba_experiment"
     elif model_type == 'diff':
-         return ConditionalDiffusion(), "diff_celeba_experiment"
+        return ConditionalDiffusion(), "diff_celeba_experiment"
     elif model_type == 'mamba':
         return VisionMambaModel(), "mamba_celeba_experiment"
     else:
