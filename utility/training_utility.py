@@ -30,23 +30,19 @@ def save_snapshot(model, dataset, folder, epoch_count, device, num_samples=8):
     filename = f"snap_{epoch_count:04d}.png"
     filepath = os.path.join(folder, filename)
 
-    # Mettiamo il modello in eval per disabilitare dropout/batchnorm durante la generazione
+    # modello in eval per disabilitare dropout/batchnorm durante la generazione
     model.eval()
 
-    # 1. Selezione casuale indici dal dataset per avere un riferimento "Reale"
+    # indici dal dataset casuali
     indices = np.random.randint(0, len(dataset), num_samples)
     samples = [dataset[i] for i in indices]
 
-    # Preparazione batch dati reali
-    # real_imgs: [B, C, H, W] - Immagini vere
-    # attrs: [B, 8] - Attributi corrispondenti (es. Maschio, Sorridente...)
     real_imgs = torch.stack([s[0] for s in samples]).to(device)
     attrs = torch.stack([s[1] for s in samples]).to(device)
 
     with torch.no_grad():
-        rows_to_save = [real_imgs.cpu()] # Riga 1: Immagini originali
+        rows_to_save = [real_imgs.cpu()] # riga 1: immagini originali
         
-        # Se è un VAE, vogliamo vedere la anche la ricostruzione
         model_name = type(model).__name__.lower()
         
         if 'vae' in model_name:
@@ -55,20 +51,13 @@ def save_snapshot(model, dataset, folder, epoch_count, device, num_samples=8):
             # Output (recon, mu, logvar)
             recon = output[0]
             
-            rows_to_save.append(recon.cpu()) # Riga 2: Ricostruzione del VAE
+            rows_to_save.append(recon.cpu()) # riga 2: ricostruzione del VAE
         
         # Per tutti i modelli chiamiamo la generazione
         if hasattr(model, 'sample') and callable(model.sample):
-            # Chiamiamo il sample passando gli attributi delle immagini reali.
-            # Questo permette di confrontare:
-            # "Reale (Uomo)" vs "Generato (Uomo)"
-            # Nota: Non passiamo real_imgs, perché il diffusion parte dal rumore.
             gen_imgs = model.sample(num_samples=num_samples, device=device, cond=attrs)
-            rows_to_save.append(gen_imgs.cpu()) # Riga 3 (o 2): Generazione
+            rows_to_save.append(gen_imgs.cpu()) # riga 3 (o 2): generazione
 
-
-        # Salvataggio immagine:
-        # Passiamo .cpu() perché matplotlib lavora su CPU/Numpy
         save_images(filepath, *rows_to_save, figsize=(10, 3 * len(rows_to_save)))
 
     print(f" -> Snapshot saved: {filepath}")
