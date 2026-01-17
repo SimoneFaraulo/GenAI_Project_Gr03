@@ -1,6 +1,6 @@
 import torch
 import sys
-from config.config import DEVICE, checkpoint_base, EPOCHS, MODEL_TYPE, EXP_NUM, LEARNING_RATE
+from config.config import DEVICE, checkpoint_base, EPOCHS, EXP_NUM, LEARNING_RATE
 from utility.checkpoint_manager import CheckpointManager
 from data.data import data_loader, data_set
 from utility.show_utils import parameter_count

@@ -62,8 +62,7 @@ def parse_arguments():
             parser.error("ERRORE: Non puoi specificare --male, --smiling o --young quando usi --all_combos.")
     else:
         if args.male is None or args.smiling is None or args.young is None:
-            parser.error(
-                "ERRORE: In modalità manuale devi specificare TUTTI gli attributi: --male, --smiling e --young.")
+            parser.error("ERRORE: In modalità manuale devi specificare TUTTI gli attributi: --male, --smiling e --young.")
 
     return args
 
