@@ -20,8 +20,8 @@ class NoiseSchedule:
         """
         self.schedule_len = schedule_len
         t = torch.linspace(0.0, schedule_len, schedule_len + 1, device=device) / schedule_len
-        a = torch.cos((t + s) / (1 + s) * torch.pi / 2) ** 2
-        a = a / a[0]
+        f = torch.cos((t + s) / (1 + s) * torch.pi / 2) ** 2
+        a = f / f[0]
         self.beta = (1 - a[1:] / a[:-1]).clip(0.0, 0.99)
         self.alpha = torch.cumprod(1.0 - self.beta, dim=0)
         self.one_minus_beta = 1 - self.beta
@@ -41,7 +41,7 @@ class TimeEncoding:
         """
         Pre-calcola la matrice degli embedding posizionali (seno e coseno) per tutti
         i passi temporali definiti dallo schedule.
-        
+            
         Args:
             dim (int): Dimensione finale del vettore di embedding.
             schedule_len (int): Numero totale di step temporali.
@@ -115,7 +115,7 @@ class UNetBlock(nn.Module):
             torch.Tensor: Output del blocco combinato con le skip connection.
         """
         x0 = x
-        cc = cond.view(-1, self.cond_features, 1, 1).expand(-1, -1, self.size, self.size)
+        cc = cond.view(-1, self.cond_features, 1, 1).expand(-1, -1, self.size, self.size) # matcha dimensioni dell'immagine input
         x = torch.cat((x, cc), dim=1)
         y = self.encoder(x)
 
@@ -123,12 +123,12 @@ class UNetBlock(nn.Module):
             y = self.inner(y, time_encodings, cond)
 
         half_size = self.size // 2
-        cc = cond.view(-1, self.cond_features, 1, 1).expand(-1, -1, half_size, half_size)
-        tt = time_encodings.view(-1, TIME_ENCODING_SIZE, 1, 1).expand(-1, -1, half_size, half_size)
+        cc = cond.view(-1, self.cond_features, 1, 1).expand(-1, -1, half_size, half_size) # matcha dimensioni dimezzate
+        tt = time_encodings.view(-1, TIME_ENCODING_SIZE, 1, 1).expand(-1, -1, half_size, half_size) 
         y1 = torch.cat((y, cc, tt), dim=1)
         x1 = self.decoder(y1)
-        x2 = torch.cat((x1, x0), dim=1)
-        return self.combiner(x2)
+        x2 = torch.cat((x1, x0), dim=1) # skip connection con l'input originale, i canali raddoppiano
+        return self.combiner(x2)        # i canali tornano a outer_features
 
     def build_combiner(self, from_features, to_features):
         """Metodo helper per costruire i blocchi sequenziali di layer convoluzionali e attivazioni. 
@@ -137,7 +137,7 @@ class UNetBlock(nn.Module):
             from_features (int): Canali in ingresso.
             to_features (int): Canali in uscita.
         """
-        return nn.Conv2d(from_features, to_features, 1)
+        return nn.Conv2d(from_features, to_features, 1) # conv 1x1 per ridurre i canali
 
     def build_encoder(self, from_features, to_features):
         """Metodo helper per costruire i blocchi sequenziali di layer convoluzionali e attivazioni. 
@@ -147,10 +147,10 @@ class UNetBlock(nn.Module):
             to_features (int): Canali in uscita.
         """
         return nn.Sequential(
-            nn.Conv2d(from_features, from_features, 3, padding='same', bias=False),
+            nn.Conv2d(from_features, from_features, 3, padding='same', bias=False), # mantiene la dimensione
             nn.BatchNorm2d(from_features),
             nn.ReLU(),
-            nn.Conv2d(from_features, to_features, 4, stride=2, padding=1, bias=False),
+            nn.Conv2d(from_features, to_features, 4, stride=2, padding=1, bias=False), # dimezza la dimensione raddoppia i canali
             nn.BatchNorm2d(to_features),
             nn.ReLU()
         )
@@ -163,10 +163,10 @@ class UNetBlock(nn.Module):
             to_features (int): Canali in uscita.
         """
         return nn.Sequential(
-            nn.Conv2d(from_features, from_features, 3, padding='same', bias=False),
+            nn.Conv2d(from_features, from_features, 3, padding='same', bias=False), # mantiene la dimensione
             nn.BatchNorm2d(from_features),
             nn.ReLU(),
-            nn.ConvTranspose2d(from_features, to_features, 4, stride=2, padding=1, bias=False),
+            nn.ConvTranspose2d(from_features, to_features, 4, stride=2, padding=1, bias=False), # raddoppia la dimensione dimezza i canali
             nn.BatchNorm2d(to_features),
             nn.ReLU()
         )
@@ -194,13 +194,14 @@ class ConditionalDiffusion(nn.Module):
             nn.Linear(ATTR_EMBED_DIM, ATTR_EMBED_DIM),
         )
         self.pre = nn.Sequential(
-            nn.Conv2d(self.channels, self.hidden_dims[0], 3, padding='same'),
+            nn.Conv2d(self.channels, self.hidden_dims[0], 3, padding='same'), # porta a hidden_dims[0] (default 64) canali
             nn.ReLU()
         )
         self.unet = self.build_unet(self.img_size, self.hidden_dims)
         self.post = nn.Sequential(
             nn.ReLU(),
-            nn.Conv2d(self.hidden_dims[0], self.channels, 3, padding='same')
+            nn.Conv2d(self.hidden_dims[0], self.channels, 3, padding='same') # porta di nuovo a 3 canali per RGB
+            # non c'è attivazione finale non lineare per predire il rumore
         )
 
     def forward(self, x, t, cond):
@@ -216,10 +217,10 @@ class ConditionalDiffusion(nn.Module):
         Returns:
             torch.Tensor: Il rumore predetto dalla rete.
         """
-        enc = self.time_encoding[t]
+        t_enc = self.time_encoding[t]
         cond_emb = self.attr_embed(cond)
         x_in = self.pre(x)
-        y = self.unet(x_in, enc, cond_emb)
+        y = self.unet(x_in, t_enc, cond_emb)
         
         output = self.post(y)
         return output
@@ -257,17 +258,17 @@ class ConditionalDiffusion(nn.Module):
         """
         batch_size = x0.shape[0]
         P = 0.2
-        cond = cond.clone()
+        cond = cond.clone()  # evita di modificare l'input originale perché usiamo il dropout sugli attributi
         u = torch.rand((batch_size,), device=x0.device)
-        cond[u < P, :] = 0.0
+        cond[u < P, :] = 0.0 # condizionamento nullo con probabilità P
         t = torch.randint(0, self.noise_schedule.schedule_len, (batch_size,), device=x0.device)
         eps = torch.randn_like(x0)
         sqrt_alpha = self.noise_schedule.sqrt_alpha[t].view(-1, 1, 1, 1)
         sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[t].view(-1, 1, 1, 1)
-        zt = sqrt_alpha * x0 + sqrt_1_alpha * eps
+        zt = sqrt_alpha * x0 + sqrt_1_alpha * eps # diffusion kernel
         g = self(zt, t, cond)
         loss = nn.functional.mse_loss(g, eps)
-
+        
         return loss
 
     @torch.no_grad()
@@ -292,44 +293,44 @@ class ConditionalDiffusion(nn.Module):
         cond0 = torch.zeros_like(cond).to(device)
 
         n = num_samples
-        # Genera z_N ~ N(0, I)
-        z = torch.randn(n, self.channels, self.img_size, self.img_size, device=device)
+        z = torch.randn(n, self.channels, self.img_size, self.img_size, device=device) # z ~ N(0,I)
         was_training = self.training
         self.eval()
 
-        # Selezione lineare dei passi temporali (sottoinsieme tau)
-        # steps valori equidistanti tra 0 e schedule_len-1
+        # sottoinsieme di passi temporali lineari da 0 a schedule_len-1 con steps elementi
         tau_seq = torch.linspace(0, self.noise_schedule.schedule_len - 1, steps, dtype=torch.long, device=device)
 
-        # Loop inverso sui passi selezionati: i da steps-1 a 0
         for i in reversed(range(steps)):
             tau_curr = tau_seq[i]
-            # Il passo precedente è l'indice successivo nella sequenza inversa (i-1), 
+
             # se siamo all'ultimo step (i=0) il precedente è "tempo -1" (che corrisponde a t<0).
             tau_prev = tau_seq[i-1] if i > 0 else -1
 
-            # t deve essere un batch per il forward del modello
-            t = tau_curr.view(1).expand(n)
+            t = tau_curr.view(1).expand(n) # t espanso a batch size
 
-            # Predizione del rumore con Classifier-Free Guidance
-            g1 = self(z, t, cond)
-            g0 = self(z, t, cond0)
-            g = lam * g1 + (1 - lam) * g0
+            g1 = self(z, t, cond)  # rumore predetto con condizionamento
+            g0 = self(z, t, cond0) # rumore predetto senza condizionamento
+            g = lam * g1 + (1 - lam) * g0 
 
-            # Calcolo del passo DDIM
             z = self.ddim_step(z, g, eta, tau_curr, tau_prev)
 
         if was_training:
             self.train()
-
+            
         return z
     
     def ddim_step(self, zt, g, eta, tau_curr, tau_prev):
         """
         Esegue un singolo passo di aggiornamento DDIM.
-        Calcola z_{tau_prev} partendo da z_{tau_curr} e dal rumore predetto g.
+        Calcola z_tau_i-1 partendo da z_tau_i e dal rumore predetto g.
+        
+        Args:
+            zt (torch.Tensor): Stato corrente z_tau_i.
+            g (torch.Tensor): Rumore predetto dalla rete.
+            eta (float): Parametro di stocasticità.
+            tau_curr (torch.Tensor): Indice temporale corrente.
+            tau_prev (torch.Tensor): Indice temporale precedente
         """
-        # Recupera alpha_curr
         a_curr = self.noise_schedule.alpha[tau_curr]
         
         # Recupera alpha_prev (gestendo il caso tau_prev < 0 -> alpha = 1.0)
@@ -338,18 +339,14 @@ class ConditionalDiffusion(nn.Module):
         else:
             a_prev = torch.tensor(1.0, device=zt.device)
         
-        # Calcolo sigma
         sigma = eta * torch.sqrt((1.0 - a_prev) / (1.0 - a_curr) * (1.0 - a_curr / a_prev))
         
-        # Calcolo coefficienti c1 e c2
-        c1 = torch.sqrt(a_prev / a_curr)
-        c2 = torch.sqrt(1.0 - a_prev - sigma**2) - torch.sqrt(a_prev * (1.0 - a_curr) / a_curr)
+        c1 = torch.sqrt(a_prev / a_curr) # coefficiente per zt
+        c2 = torch.sqrt(1.0 - a_prev - sigma**2) - torch.sqrt(a_prev * (1.0 - a_curr) / a_curr) # coefficiente per g
+         
+        eps = torch.randn_like(zt) # rumore casuale
         
-        # Rumore casuale per il passo stocastico (se eta > 0)
-        eps = torch.randn_like(zt)
-        
-        # Aggiornamento latente
-        z_prev = c1 * zt + c2 * g + sigma * eps
+        z_prev = c1 * zt + c2 * g + sigma * eps # calcolo z_tau_i-1
         
         return z_prev
     
