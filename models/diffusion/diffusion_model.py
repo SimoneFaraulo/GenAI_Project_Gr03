@@ -58,7 +58,7 @@ class TimeEncoding:
         ang = torch.linspace(0.0, torch.pi / 2, schedule_len, device=device)
         # mul = Misura della frequenza della sinusoide su ogni componente di dim
         logmul = torch.linspace(0.0, math.log(40), dim2, device=device)
-        mul = torch.exp(logmul)
+        mul = torch.exp(logmul) # frequenze distribuite uniformemente in scala logaritmica
 
         for i in range(dim2):
             # ang [schedule_len ] [mul[i]] = frequenza della singola componente iesima di dim (scalare)

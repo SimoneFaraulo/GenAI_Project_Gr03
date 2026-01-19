@@ -117,7 +117,35 @@ python generate.py --model diff --all_combos --samples_per_combo 2
 
 ```
 
+### Examples
+#### VAE
+1. Woman, Smiling, Young - 16 images
+```bash
+python generate.py --model vae --male 0 --smiling 1 --young 1 --num_samples 16 --show
+```
+2. All combinations (grid) - 4 images per combo
+```bash
+python generate.py --model vae --all_combos --samples_per_combo 4 --show
+```
+#### Diffusion Model
+1. All combinations (grid) - fast (50 DDIM steps) eta = 0.0 - 4 images per combo
+```bash
+python generate.py --model diff --all_combos --samples_per_combo 2 --steps 500 --eta 0.8 --show
+```
+2. All combinations (grid) - high quality (DDPM) - 2 images per combo
+```bash
+python generate.py --model diff --all_combos --samples_per_combo 1 --steps 1000 --eta 1.0
+```
+#### Vision Mamba
+1. All combinations (grid) - low temperature (deterministic) - 4 images per combo
+```bash
+python generate.py --model mamba --all_combos --samples_per_combo 4 --temperature 0.0 --show
+```
 
+2. All combinations (grid) - high temperature (diversity) - 4 images per combo
+```bash
+python generate.py --model mamba --all_combos --samples_per_combo 4 --temperature 0.01 --show
+```
 
 **Arguments:**
 
