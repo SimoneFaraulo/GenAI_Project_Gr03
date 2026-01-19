@@ -149,7 +149,8 @@ def main():
 
     args = parse_arguments()
 
-    print(f"--- Avvio Generazione: {args.model.upper()} ---")
+    model_names = {'vae': 'Conditional VAE', 'diff': 'Diffusion Model', 'mamba': 'Vision Mamba'}
+    print(f"--- Avvio Generazione: {model_names[args.model]} ---")
     mode_str = "Griglia Completa (Colonne)" if args.all_combos else "Manuale"
     print(f"Modalità: {mode_str}")
 
