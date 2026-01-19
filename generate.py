@@ -94,8 +94,10 @@ def prepare_grid_data(samples_per_combo, device):
     full_cond_list = []
     for combo in combinations:
         for _ in range(samples_per_combo):
+            # aggiungo n combo in base a samples_per_combo
             full_cond_list.append(combo)
 
+    #tensore (n_samples*8, 3)
     cond = torch.tensor(full_cond_list, dtype=torch.float32, device=device)
     cond = (cond * 2) - 1
     return cond, labels
@@ -214,18 +216,24 @@ def main():
     generated_images = generated_images.cpu()
 
     if args.all_combos:
+        # riorganizzo le immagini da  [N, 3, h, w] -> [COMBOS, SAMPLES_PER_COMBO, 3, H, W]
         reshaped_imgs = generated_images.view(8, args.samples_per_combo, *generated_images.shape[1:])
+        # riorganizzo il tensore di immagini [SAMPLES_PER_COMBO, COMBOS, 3, H, W]
         transposed_imgs = reshaped_imgs.permute(1, 0, 2, 3, 4)
         rows = []
         for i in range(args.samples_per_combo):
+            # Creo un vettore di righe, ogni elemento è un tensore [COMBOS, 3, H, W]
             rows.append(transposed_imgs[i])
 
         print("\nLegenda Colonne (da sinistra a destra):")
         for idx, lbl in enumerate(labels):
+            #Stampa la legenda delle colonne
             print(f"Col {idx + 1}: {lbl}")
 
         filename = f"grid_cols_{timestamp}.png"
         filepath = os.path.join(output_folder, filename)
+        # con * passo gli elementi della lista spacchettati, li impacchetta la funzione
+        # save images in una tupla (tensore_1, tensore_2 ,..,)
         save_images(filepath, *rows, figsize=(16, args.samples_per_combo * 2))
 
         if args.show:
@@ -235,6 +243,7 @@ def main():
     else:
         filename = f"gen_{label_str}_{timestamp}.png"
         filepath = os.path.join(output_folder, filename)
+        # [N_SAMPLES, 3, H, W]
         save_images(filepath, generated_images, figsize=(10, 4))
 
         if args.show:
