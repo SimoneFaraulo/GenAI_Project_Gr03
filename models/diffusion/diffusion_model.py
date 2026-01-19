@@ -340,6 +340,7 @@ class ConditionalDiffusion(nn.Module):
         """
         if cond is None:
             cond = torch.randint(0, 2, (num_samples, ATTR_DIM)).float().to(device)
+            cond = (cond * 2) - 1
 
         # [N, dim]
         cond0 = torch.zeros_like(cond).to(device)
