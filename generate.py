@@ -3,7 +3,7 @@ import os
 import sys
 import torch
 import time
-from config.config import DEVICE, NOISE_SCHEDULE_L, WEIGHTS_DIRECTORY
+from config.config import DEVICE, LAMBDA, NOISE_SCHEDULE_L, WEIGHTS_DIRECTORY
 from utility.checkpoint_manager import CheckpointManager
 from utility.show_utils import save_images, show_images
 from train.model_factory import get_model_from_env
@@ -35,7 +35,7 @@ def parse_arguments():
                         help="Se attivo, genera una griglia con tutte le 8 combinazioni. Ignora gli attributi singoli.")
 
     parser.add_argument('--samples_per_combo', '-spc', type=int, default=1,
-                        help="[Solo per --all_combos] Numero di righe (campioni) da generare per ogni colonna (combinazione).")
+                        help="[Solo per --all_combos] Numero di righe (campioni) da generare per ogni colonna (combinazione). Default: 1")
 
     parser.add_argument('--male', '-M', type=int, choices=[0, 1], help="Genera maschio (1) o femmina (0)")
     parser.add_argument('--smiling', '-SM', type=int, choices=[0, 1], help="Genera sorridente (1) o no (0)")
@@ -45,7 +45,7 @@ def parse_arguments():
                         help="[Solo per modalità Manuale] Numero totale di immagini da generare. Default: 8")
 
     parser.add_argument('--temperature', '-t', type=float, default=0.0,
-                        help="Temperatura di campionamento (usata specificamente per Mamba). "
+                        help="[solo per model='mamba'] Temperatura di campionamento. "
                              "Per Mamba si consigliano valori molto bassi (es. 0.02). Default: 1.0")
 
     parser.add_argument('--show', action='store_true', help="Mostra i risultati a schermo.")
@@ -54,6 +54,9 @@ def parse_arguments():
                         help="[solo per model='diff'] Numero di passi di campionamento DDIM. Default: NOISE_SCHEDULE_L.")
     parser.add_argument('--eta', type=float, default=1.0, 
                         help="[solo per model='diff'] Parametro di stocasticità DDIM (1.0 = DDPM (default), 0.0 = deterministico/DDIM).")
+    parser.add_argument('--lambda', type=float, default=LAMBDA,
+                        help="[solo per model='diff'] Peso della guida (Classifier-Free Guidance). Default: valore da config.",
+                        dest='lam')
 
     args = parser.parse_args()
 
@@ -155,7 +158,8 @@ def main():
     elif args.model == 'diff':
         print(f"Eta impostata: {args.eta}")
         print(f"Steps impostati: {args.steps}")
-        if args.steps > NOISE_SCHEDULE_L:
+        print(f"Lambda impostata: {args.lam}")
+        if args.steps > NOISE_SCHEDULE_L or args.steps < 0:
             raise ValueError(f"ERRORE: steps ({args.steps}) non può essere maggiore di NOISE_SCHEDULE_L ({NOISE_SCHEDULE_L})")
 
     try:
@@ -199,6 +203,7 @@ def main():
             elif args.model == 'diff':
                 kwargs['steps'] = args.steps
                 kwargs['eta'] = args.eta
+                kwargs['lam'] = args.lam
 
             generated_images = model.sample(cond.shape[0], DEVICE, cond=cond, **kwargs)
 
