@@ -50,18 +50,22 @@ class PScan(torch.autograd.Function):
         B, D, L, _ = A.size()
         num_steps = int(math.log2(L))
 
-        # up sweep (last 2 steps unfolded)
+        # FASE BOTTOM-UP 
+        # up sweep (last 2 steps unfolded) 
         Aa = A
         Xa = X
         for _ in range(num_steps-2):
-            T = Xa.size(2)
-            Aa = Aa.view(B, D, T//2, 2, -1)
+            T = Xa.size(2) # sequence length
+            Aa = Aa.view(B, D, T//2, 2, -1) # raggruppa a coppie
             Xa = Xa.view(B, D, T//2, 2, -1)
             
-            Xa[:, :, :, 1].add_(Aa[:, :, :, 1].mul(Xa[:, :, :, 0]))
-            Aa[:, :, :, 1].mul_(Aa[:, :, :, 0])
+            # operatore ⊕ definito negli appunti per la sequenza di matrici A~ e vettori x~
+            # indice 0 è i, indice 1 è j (figlio sinistro e destro)
+            Xa[:, :, :, 1].add_(Aa[:, :, :, 1].mul(Xa[:, :, :, 0])) # x~j = A~j * x~i + x~j
+            Aa[:, :, :, 1].mul_(Aa[:, :, :, 0])                     # A~j = A~j * A~i
 
-            Aa = Aa[:, :, :, 1]
+            # manteniamo solo i figli destri che ora contengono i valori aggregati
+            Aa = Aa[:, :, :, 1] 
             Xa = Xa[:, :, :, 1]
 
         # we have only 4, 2 or 1 nodes left
@@ -76,10 +80,11 @@ class PScan(torch.autograd.Function):
         else:
             return
 
+        # FASE TOP-DOWN
         # down sweep (first 2 steps unfolded)
-        Aa = A[:, :, 2**(num_steps-2)-1:L:2**(num_steps-2)]
+        Aa = A[:, :, 2**(num_steps-2)-1:L:2**(num_steps-2)] # prende gli indici dispari (sinistri)
         Xa = X[:, :, 2**(num_steps-2)-1:L:2**(num_steps-2)]
-        Xa[:, :, 2].add_(Aa[:, :, 2].mul(Xa[:, :, 1]))
+        Xa[:, :, 2].add_(Aa[:, :, 2].mul(Xa[:, :, 1]))  # prende il valore accumulato dal genitore/fratello precedente e aggiungilo al nodo corrente
         Aa[:, :, 2].mul_(Aa[:, :, 1])
 
         for k in range(num_steps-3, -1, -1):
@@ -157,8 +162,8 @@ class PScan(torch.autograd.Function):
         If you can, privilege sequence lengths that are powers of two.
 
         Args:
-            A_in : (B, L, D, N)
-            X_in : (B, L, D, N)
+            A_in : (B, L, D, N) sarebbe A~ degli appunti
+            X_in : (B, L, D, N) sarebbe x~ degli appunti
 
         Returns:
             H : (B, L, D, N)

@@ -18,18 +18,21 @@ class MambaBlock(nn.Module):
             state_size (int): Dimensione dello stato latente SSM (N).
         """
         super().__init__()
-        self.dim = dim
-        self.state_size = state_size
+        self.dim = dim # D dimensione embedding
+        self.state_size = state_size # N dimensione stato 
 
         A = torch.ones(dim, state_size)
-        r = torch.linspace(0.5, state_size / 2, state_size)
-        A *= r[None, :]
-        logA = torch.log(A)
+        r = torch.linspace(0.5, state_size / 2, state_size) # va da 0.5 a N/2 con N passi
+        # inizializza A in modo che ogni dimensione dell'embedding abbia gli stessi valori crescenti
+        # i primi valori più piccoli comportano memoria a lungo termine mentre i valori più grandi a breve termine
+        A *= r[None, :]   # simile a HiPPO
+        logA = torch.log(A) 
         self.logA = nn.Parameter(logA)
-        self.projB = nn.Linear(dim, state_size)
-        self.projC = nn.Linear(dim, state_size)
-        self.projDelta = nn.Linear(dim, 1, bias=False)
-        biasDelta = torch.zeros(1, 1, dim)
+        
+        self.projB = nn.Linear(dim, state_size) # sB: Lienar(D,N)
+        self.projC = nn.Linear(dim, state_size) # sC: Linear(D,N)
+        self.projDelta = nn.Linear(dim, 1, bias=False) # sDelta: Linear(D,1) non (D,D) per semplicità
+        biasDelta = torch.zeros(1, 1, dim)  # bias diverso per ogni D, ma condiviso da tutti gli stati N
         self.biasDelta = nn.Parameter(biasDelta)
         self.softplus = nn.Softplus()
 
@@ -44,11 +47,11 @@ class MambaBlock(nn.Module):
             torch.Tensor: Tensore di output processato (Batch, Seq_Len, Dim).
         """
         self.clean_cached()
-        A = self.computeA()
-        B, C, Delta = self.computeBCDelta(x)
-        Abar, Bbar = self.discretize(Delta, A, B)
-        h = self.perform_scan(Abar, Bbar, x)
-        y = torch.einsum('bln,bldn->bld', C, h)
+        A = self.computeA() # calcola A da logA matrice garantendo autovalori negativi
+        B, C, Delta = self.computeBCDelta(x)  
+        Abar, Bbar = self.discretize(Delta, A, B) # ZOH
+        h = self.perform_scan(Abar, Bbar, x) # sequenza di stati nascosti (B, L, D, N)
+        y = torch.einsum('bln,bldn->bld', C, h)  # moltiplica C: (B,L,N) con h: (B,L,D,N) sommando su N -> (B,L,D)
         return y
 
     @torch.no_grad()
@@ -61,9 +64,8 @@ class MambaBlock(nn.Module):
             batch_size (int): Dimensione del batch per l'inferenza. Default: 1.
         """
         self.cached_A = self.computeA()
-        self.cached_h = torch.zeros(
-            batch_size, 1, self.dim, self.state_size,
-            device=self.cached_A.device)
+        self.cached_h = torch.zeros(batch_size, 1, self.dim, self.state_size,
+                                    device=self.cached_A.device)
 
     def clean_cached(self):
         """
@@ -87,7 +89,7 @@ class MambaBlock(nn.Module):
         B, C, Delta = self.computeBCDelta(x)
         Abar, Bbar = self.discretize(Delta, A, B)
         h = Abar * self.cached_h + Bbar * x[..., None]
-        y = torch.einsum('bln,bldn->bld', C, h)
+        y = torch.einsum('bln,bldn->bld', C, h) # moltiplica C: (B,1,N) con h: (B,1,D,N) sommando su N -> (B,1,D)
         self.cached_h.copy_(h)
         return y
 
@@ -99,7 +101,7 @@ class MambaBlock(nn.Module):
         Returns:
             torch.Tensor: Il parametro A.
         """
-        return -torch.exp(self.logA)
+        return -torch.exp(self.logA) # garantisce autovalori negativi
 
     def computeBCDelta(self, x):
         """
@@ -111,9 +113,9 @@ class MambaBlock(nn.Module):
         Returns:
             tuple: Una tupla contenente i tensori (B, C, Delta).
         """
-        B = self.projB(x)
-        C = self.projC(x)
-        Delta = self.softplus(self.biasDelta + self.projDelta(x))
+        B = self.projB(x) # (B, L, N)
+        C = self.projC(x) # (B, L, N)
+        Delta = self.softplus(self.biasDelta + self.projDelta(x)) # (B, L, D)
         return B, C, Delta
 
     def discretize(self, Delta, A, B):
@@ -129,11 +131,11 @@ class MambaBlock(nn.Module):
         Returns:
             tuple: I parametri discretizzati (Abar, Bbar).
         """
-        DeltaA = Delta[:, :, :, None] * A[None, None, :, :]
+        DeltaA = Delta[:, :, :, None] * A[None, None, :, :] # Delta: (B, L, D, 1), A: (1, 1, D, N)
         Abar = torch.exp(DeltaA)
-        DeltaB = Delta[:, :, :, None] * B[:, :, None, :]
+        DeltaB = Delta[:, :, :, None] * B[:, :, None, :] # B: (B, L, 1, N)
         denom = DeltaA + 1e-7
-        Bbar = (Abar - 1.0) / (denom.abs().clamp(min=1e-10) * denom.sign()) * DeltaB
+        Bbar = (Abar - 1.0) / (denom.abs().clamp(min=1e-10) * denom.sign()) * DeltaB # (Delta * A)^-1 * (Abar - I) * B
 
         return Abar, Bbar
 
@@ -150,7 +152,7 @@ class MambaBlock(nn.Module):
             torch.Tensor: Sequenza degli stati nascosti calcolati.
         """
         Atilde = Abar
-        Xtilde = Bbar * x[..., None]
+        Xtilde = Bbar * x[..., None] # (B, L, D, N)
         return pscan(Atilde, Xtilde)
 
 
@@ -170,18 +172,23 @@ class MambaLayer(nn.Module):
             expansion (int): Fattore di espansione per la dimensione interna del blocco. Default: 1.
         """
         super().__init__()
-        edim = int(dim * expansion)
+        edim = int(dim * expansion) # dimensione espansa interna
         self.dim = dim
         self.edim = edim
         self.state_size = state_size
         self.conv_kernel = conv_kernel
-
         self.activation = nn.SiLU()
+        
+        # ramo principale: proiezione -> conv -> SSM
         self.proj_1 = nn.Linear(dim, edim)
         self.conv = nn.Conv1d(edim, edim, conv_kernel, padding=conv_kernel - 1)
         self.mamba = MambaBlock(edim, state_size)
+        
+        # ramo gating
         self.proj_2 = nn.Linear(dim, edim)
-        self.proj_3 = nn.Linear(edim, dim)
+        
+        # proiezione finale
+        self.proj_3 = nn.Linear(edim, dim) 
 
     def forward(self, x):
         """
@@ -193,12 +200,16 @@ class MambaLayer(nn.Module):
         Returns:
             torch.Tensor: Output del layer (Batch, Seq_Len, Dim).
         """
+        # ramo principale
         ex = self.proj_1(x)
         ex = self.do_conv(ex)
         ex = self.activation(ex)
         y = self.mamba(ex)
+        
+        # ramo gating
         g = self.proj_2(x)
         g = self.activation(g)
+        
         y *= g
         y = self.proj_3(y)
         return y
@@ -230,12 +241,16 @@ class MambaLayer(nn.Module):
         if self.cached_x.device != x.device:
             self.cached_x = self.cached_x.to(device=x.device)
 
+        # ramo principale
         ex = self.proj_1(x)
-        ex = self.do_conv(ex, True)
+        ex = self.do_conv(ex, True) # usa il buffer per la convoluzione causale
         ex = self.activation(ex)
-        y = self.mamba.inference_step(ex)
+        y = self.mamba.inference_step(ex) # passo del Mamba Block
+        
+        # ramo gating
         g = self.proj_2(x)
         g = self.activation(g)
+        
         y *= g
         y = self.proj_3(y)
         return y
@@ -255,14 +270,14 @@ class MambaLayer(nn.Module):
         if inference:
             ck = self.conv_kernel
             ed = self.edim
-            self.cached_x = torch.cat([self.cached_x, x], dim=1)[:, 1:]
+            self.cached_x = torch.cat([self.cached_x, x], dim=1)[:, 1:] # mantiene gli ultimi ck elementi
             x = self.cached_x
         L = x.shape[1]
-        x = x.permute(0, 2, 1)
-        y = self.conv(x)[:, :, :L]
-        y = y.permute(0, 2, 1)
+        x = x.permute(0, 2, 1) # (B, L, D) -> (B, D, L), D sono i canali
+        y = self.conv(x)[:, :, :L] # prendo solo i primi L elementi per mantenere la dimensione
+        y = y.permute(0, 2, 1) # (B, D, L) -> (B, L, D)
         if inference:
-            y = y[:, -1:, :]
+            y = y[:, -1:, :] # solo l'ultimo elemento per l'inferenza 
         return y
 
 class ResidualMambaLayer(nn.Module):

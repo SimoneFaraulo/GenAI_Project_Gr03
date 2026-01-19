@@ -24,7 +24,7 @@ class VisionMambaModel(nn.Module):
         self.dim = MAMBA_DIM
         self.img_channels = IMG_CHANNELS
         self.attr_dim = ATTR_DIM
-        self.patch_embedding = nn.Conv2d(
+        self.patch_embedding = nn.Conv2d( # ogni patch viene mappato in un vettore di dimensione dim
             in_channels=self.img_channels,
             out_channels=self.dim,
             kernel_size=self.patch_size,
@@ -33,8 +33,8 @@ class VisionMambaModel(nn.Module):
         self.h_patches = IMG_SIZE // self.patch_size
         self.w_patches = IMG_SIZE // self.patch_size
         self.seq_len = self.h_patches * self.w_patches
-        self.attr_embedding = nn.Linear(self.attr_dim, self.dim)
-        self.pos_embedding = nn.Parameter(torch.randn(1, self.seq_len + 1, self.dim))
+        self.attr_embedding = nn.Linear(self.attr_dim, self.dim) # embedding per il condizionamento
+        self.pos_embedding = nn.Parameter(torch.randn(1, self.seq_len + 1, self.dim)) # +1 per il token di condizione
 
         self.layers = nn.ModuleList()
         for i in range(MAMBA_LAYERS):
@@ -62,22 +62,20 @@ class VisionMambaModel(nn.Module):
         Returns:
             torch.Tensor: Logits predetti per il patch successivo (Batch, Seq_Len, Pixels_Per_Patch).
         """
-        x_emb = self.patch_embedding(x)
+        x_emb = self.patch_embedding(x) # (B, D, H_patch, W_patch)
+        x_seq = x_emb.flatten(2).transpose(1, 2) # (B, L, D)
 
-        x_seq = x_emb.flatten(2).transpose(1, 2)
-
-        c_emb = self.attr_embedding(cond).unsqueeze(1)
+        c_emb = self.attr_embedding(cond).unsqueeze(1) # (B, ATTR_EMB) -> (B, D) -> (B, 1, D)
 
         x_input = torch.cat([c_emb, x_seq], dim=1)
-
         x_input = x_input + self.pos_embedding
 
         for layer in self.layers:
             x_input = layer(x_input)
 
-        logits = self.output_head(x_input)
+        logits = self.output_head(x_input) # (B, L+1, D) -> (B, L+1, Pixels_Per_Patch)
 
-        return logits[:, :-1, :]
+        return logits[:, :-1, :] # l'ultimo elemento è superfluo (non ha un patch successivo da predire)
 
     def loss_function(self, pred_patches, real_imgs):
         """
@@ -94,11 +92,13 @@ class VisionMambaModel(nn.Module):
                 """
         B = real_imgs.shape[0]
 
+        # (B, C, H, W) -> (B, C, H_patches, W, patch_size) -> (B, C, H_patches, W_patches, patch_size, patch_size)
         target_patches = real_imgs.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
 
+        # (B, C, H_patches, W_patches, patch_size, patch_size) -> (B, C, L=H_patches*W_patches, patch_size, patch_size) 
         target_patches = target_patches.contiguous().view(B, self.img_channels, -1, self.patch_size, self.patch_size)
-        target_patches = target_patches.permute(0, 2, 1, 3, 4)
-        target_patches = target_patches.contiguous().view(B, self.seq_len, -1)
+        target_patches = target_patches.permute(0, 2, 1, 3, 4) # (B, L, C, patch_size, patch_size)
+        target_patches = target_patches.contiguous().view(B, self.seq_len, -1) # (B, L, Pixels_Per_Patch)
 
         loss = F.mse_loss(pred_patches, target_patches)
 
@@ -132,39 +132,44 @@ class VisionMambaModel(nn.Module):
             cond = cond.to(device)
 
         B = num_samples
+        # inizializza la cache per l'inferenza in ogni layer Mamba
         for layer in self.layers:
             layer.inference_start(batch_size=B)
 
-        c_emb = self.attr_embedding(cond).unsqueeze(1)
+        c_emb = self.attr_embedding(cond).unsqueeze(1) # (B, ATTR_EMB) -> (B, D) -> (B, 1, D)
         curr_input = c_emb + self.pos_embedding[:, 0:1, :]
 
         for layer in self.layers:
             curr_input = layer.inference_step(curr_input)
 
-        next_patch_pred = self.output_head(curr_input)
+        next_patch_pred = self.output_head(curr_input) # primo patch predetto (B, 1, Pixels_Per_Patch)
 
         generated_patches = []
         generated_patches.append(next_patch_pred)
+        
+        # ciclo autoregressivo per generare i patch successivi
         for i in range(self.seq_len - 1):
-            noise = torch.randn_like(next_patch_pred) * temperature
+            noise = torch.randn_like(next_patch_pred) * temperature # rumore per variabilità
             patch_input_for_next_step = next_patch_pred + noise
+            
+            # (B, Pixels_Per_Patch) -> (B, C, patch_size, patch_size)
             prev_patch_img = patch_input_for_next_step.view(B, self.img_channels, self.patch_size, self.patch_size)
-            patch_emb = self.patch_embedding(prev_patch_img)
+            patch_emb = self.patch_embedding(prev_patch_img) # (B, D, 1, 1)
 
-            curr_input = patch_emb.view(B, 1, self.dim)
-            curr_input = curr_input + self.pos_embedding[:, i + 1:i + 2, :]
+            curr_input = patch_emb.view(B, 1, self.dim) # (B, 1, D)
+            curr_input = curr_input + self.pos_embedding[:, i + 1:i + 2, :] # embedding posizionale i+1
 
             for layer in self.layers:
                 curr_input = layer.inference_step(curr_input)
-            next_patch_pred = self.output_head(curr_input)
+            next_patch_pred = self.output_head(curr_input) # patch successivo predetto
 
             generated_patches.append(next_patch_pred)
 
-        full_seq = torch.cat(generated_patches, dim=1)
+        full_seq = torch.cat(generated_patches, dim=1) # (B, L, Pixels_Per_Patch)
 
         full_seq = full_seq.view(B, self.h_patches, self.w_patches, self.img_channels, self.patch_size, self.patch_size)
-        full_seq = full_seq.permute(0, 3, 1, 4, 2, 5)
-        recon_img = full_seq.contiguous().view(B, self.img_channels, IMG_SIZE, IMG_SIZE)
+        full_seq = full_seq.permute(0, 3, 1, 4, 2, 5) # (B, C, H_patches, patch_size, W_patches, patch_size)
+        recon_img = full_seq.contiguous().view(B, self.img_channels, IMG_SIZE, IMG_SIZE) # (B, C, H, W)
 
         self.train()
         return recon_img
