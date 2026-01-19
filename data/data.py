@@ -8,13 +8,13 @@ il reperimento dei dati. Fornisce inoltre utilità per la manipolazione dei tens
 """
 
 
-from config.config import BATCH_SIZE, DATA_DIRECTORY, NUM_WORKERS
+from config.config import BATCH_SIZE, DATA_DIRECTORY, NUM_WORKERS, IMG_SIZE
 from .image_dataset import CelebADataset
 import torch
 from torchvision.transforms import v2 as tforms
 from torch.utils.data import DataLoader
 
-IMAGE_SIZE = 64
+IMAGE_SIZE = IMG_SIZE
 
 transform = tforms.Compose([
     tforms.ToImage(),

@@ -18,10 +18,13 @@ class NoiseSchedule:
             s (float): Shift parameter per lo schedule coseno (default 0.008).
             device (torch.device): Dispositivo su cui allocare i tensori.
         """
+        #attributo di comodità utile per logica successiva
         self.schedule_len = schedule_len
+        #genera un tensore monodimensionale di sched_len + 1 valori tra 0 e sched_len a passo lineare
         t = torch.linspace(0.0, schedule_len, schedule_len + 1, device=device) / schedule_len
         f = torch.cos((t + s) / (1 + s) * torch.pi / 2) ** 2
-        a = f / f[0]
+        a = f / f[0] # a_0 = 1
+        #calcolo dei beta secondo la formulazione matematica escludendo a[0] e a[T+1]
         self.beta = (1 - a[1:] / a[:-1]).clip(0.0, 0.99)
         self.alpha = torch.cumprod(1.0 - self.beta, dim=0)
         self.one_minus_beta = 1 - self.beta
@@ -30,7 +33,7 @@ class NoiseSchedule:
         self.sqrt_beta = torch.sqrt(self.beta)
         self.sqrt_1_alpha = torch.sqrt(self.one_minus_alpha)
         self.sqrt_1_beta = torch.sqrt(self.one_minus_beta)
-
+        #Sono tutti vettori lineari di T elementi con Cosine Noise Schedule per ogni t
 
 class TimeEncoding:
     """
@@ -51,15 +54,26 @@ class TimeEncoding:
         self.schedule_len = schedule_len
         dim2 = dim // 2
         encoding = torch.zeros(schedule_len, dim, device=device)
+        # Ang = Misura del tempo nella mia sinusoide
         ang = torch.linspace(0.0, torch.pi / 2, schedule_len, device=device)
+        # mul = Misura della frequenza della sinusoide su ogni componente di dim
         logmul = torch.linspace(0.0, math.log(40), dim2, device=device)
         mul = torch.exp(logmul)
 
         for i in range(dim2):
+            # ang [schedule_len ] [mul[i]] = frequenza della singola componente iesima di dim (scalare)
             a = ang * mul[i]
+            # Ogni riga avrà una sinusoide a t diversa con una w diversa ad ogni componente di dim
+            # sin(w * t) -> t = ang, w = mul, alte frequenze nelle componenti di dim maggiori
             encoding[:, 2 * i] = torch.sin(a)
             encoding[:, 2 * i + 1] = torch.cos(a)
+        # Encoding utile a distinguere efficientemente i vari passi temporali
+        # Ogni angolo (t) rappresenta l'info di ogni passo t
+        # la freq (mul) è utile a rappresentare in maniera completa l'info
+        # La rete tramite (t) saperà a quale passo temporale si trova e se si trova in t piccoli (vicino alla distribuzione target)
+        # si concentrerà sulle componenti ad alta frequenza per ricostruire i dettagli di z viceversa nelle fasi iniziali t grandi
         self.encoding = encoding
+
 
     def __getitem__(self, t):
         """
@@ -114,19 +128,31 @@ class UNetBlock(nn.Module):
         Returns:
             torch.Tensor: Output del blocco combinato con le skip connection.
         """
+        # input x0 = [B, 3, size, size]
         x0 = x
+        ## cc = [B, conf_feat] -> [B, cond_feat, size, size]
         cc = cond.view(-1, self.cond_features, 1, 1).expand(-1, -1, self.size, self.size) # matcha dimensioni dell'immagine input
+        # x = [B, 3 + cond_feat, size, size]
         x = torch.cat((x, cc), dim=1)
         y = self.encoder(x)
+        #ritorna un y cond size // 2
 
         if self.inner:
+            # Eseguo la ricorsione passo un input al figlio del padre
             y = self.inner(y, time_encodings, cond)
 
+        # sono nella bottle neck -> ho ridotto la dim_outer in una di inner/2
         half_size = self.size // 2
+        # preparo l'info condizionale per darla in paso al decoder che prende tensori con
+        # dim spaziale / 2
         cc = cond.view(-1, self.cond_features, 1, 1).expand(-1, -1, half_size, half_size) # matcha dimensioni dimezzate
-        tt = time_encodings.view(-1, TIME_ENCODING_SIZE, 1, 1).expand(-1, -1, half_size, half_size) 
+        # t = [B, dim_time_enc] -> [B, dim_time_enc, outer_size//2, outer_size//2]
+        tt = time_encodings.view(-1, TIME_ENCODING_SIZE, 1, 1).expand(-1, -1, half_size, half_size)
+        # y1 = [B, dim_time_enc + cond_dim + y_feat, half_size, half_size]
         y1 = torch.cat((y, cc, tt), dim=1)
+        # Ho pronto il tensore da dare in input al decoder
         x1 = self.decoder(y1)
+        # x1 = [B, outer_feat, size, size]
         x2 = torch.cat((x1, x0), dim=1) # skip connection con l'input originale, i canali raddoppiano
         return self.combiner(x2)        # i canali tornano a outer_features
 
@@ -221,7 +247,6 @@ class ConditionalDiffusion(nn.Module):
         cond_emb = self.attr_embed(cond)
         x_in = self.pre(x)
         y = self.unet(x_in, t_enc, cond_emb)
-        
         output = self.post(y)
         return output
 
@@ -238,10 +263,13 @@ class ConditionalDiffusion(nn.Module):
             torch.Tensor: Il rumore predetto dalla rete.
         """
         if len(feat_list) > 2:
+            # vado a creare ogni volta un unet che riduce la dim spaziale di 2
             inner_block = self.build_unet(size // 2, feat_list[1:])
         else:
             inner_block = None
 
+        # se la lista è solo di due elementi ho solo un outer e inner feature
+        # sono nella bottle, neck e inizio i return creando la rete per intero
         return UNetBlock(size, feat_list[0], feat_list[1], ATTR_EMBED_DIM, inner_block)
 
     def compute_loss(self, x0, cond):
@@ -256,16 +284,29 @@ class ConditionalDiffusion(nn.Module):
         Returns:
             torch.Tensor: Scalare rappresentante la MSE loss.
         """
+        # [B, 3, H, W]
         batch_size = x0.shape[0]
         P = 0.2
+        # [B, 3]
         cond = cond.clone()  # evita di modificare l'input originale perché usiamo il dropout sugli attributi
         u = torch.rand((batch_size,), device=x0.device)
         cond[u < P, :] = 0.0 # condizionamento nullo con probabilità P
+        #Seleziono un t randomico
         t = torch.randint(0, self.noise_schedule.schedule_len, (batch_size,), device=x0.device)
+        # eps = [B, 3, H, W]
         eps = torch.randn_like(x0)
+        # alpha è uno scalare per ogni posizione t lo vedo come un tensore replicato su tutto il batch
+        # [B, 1, 1, 1]
+        # Inizialmente sqrt_alpha sarà dimensione [B], con view lo rivedo in [B, 1,1,1]
+        # view non fa broadcasting semplicemente riorganizza i dati in un altra forma
+        # non replica assolutamente alcun dato
         sqrt_alpha = self.noise_schedule.sqrt_alpha[t].view(-1, 1, 1, 1)
         sqrt_1_alpha = self.noise_schedule.sqrt_1_alpha[t].view(-1, 1, 1, 1)
+        # Calcolo zt con il diff kernel
+        # Con broadcasting le dimensioni di alpha su C, W, H vengono replicate, replichiamo il valore
+        #di alpha su tutte quelle dim così come anche per sqrt_1_alpha
         zt = sqrt_alpha * x0 + sqrt_1_alpha * eps # diffusion kernel
+        # Stimo g
         g = self(zt, t, cond)
         loss = nn.functional.mse_loss(g, eps)
         
@@ -290,14 +331,17 @@ class ConditionalDiffusion(nn.Module):
         if cond is None:
             cond = torch.randint(0, 2, (num_samples, ATTR_DIM)).float().to(device)
 
+        # [N, dim]
         cond0 = torch.zeros_like(cond).to(device)
 
         n = num_samples
+        # [B, 3, h, w]
         z = torch.randn(n, self.channels, self.img_size, self.img_size, device=device) # z ~ N(0,I)
         was_training = self.training
         self.eval()
 
         # sottoinsieme di passi temporali lineari da 0 a schedule_len-1 con steps elementi
+        # tensore di dimensione steps da 0 a T-1
         tau_seq = torch.linspace(0, self.noise_schedule.schedule_len - 1, steps, dtype=torch.long, device=device)
 
         for i in reversed(range(steps)):
@@ -306,12 +350,16 @@ class ConditionalDiffusion(nn.Module):
             # se siamo all'ultimo step (i=0) il precedente è "tempo -1" (che corrisponde a t<0).
             tau_prev = tau_seq[i-1] if i > 0 else -1
 
+            # [B]
             t = tau_curr.view(1).expand(n) # t espanso a batch size
 
+            #classifier free guidance
             g1 = self(z, t, cond)  # rumore predetto con condizionamento
             g0 = self(z, t, cond0) # rumore predetto senza condizionamento
+            # [B, 3, H, W]
             g = lam * g1 + (1 - lam) * g0 
 
+            # tau_curr [B] e tau_prev B or -1
             z = self.ddim_step(z, g, eta, tau_curr, tau_prev)
 
         if was_training:
@@ -335,17 +383,22 @@ class ConditionalDiffusion(nn.Module):
         
         # Recupera alpha_prev (gestendo il caso tau_prev < 0 -> alpha = 1.0)
         if tau_prev >= 0:
+            #recupero l'alpha associata al tempo t-delta
             a_prev = self.noise_schedule.alpha[tau_prev]
         else:
+            # Mi trovo in alpha_0 non definito e di default = 0
             a_prev = torch.tensor(1.0, device=zt.device)
-        
+
+        # calcolo esattamente sigma il rumore da aggiungere a z_t-delta generato
         sigma = eta * torch.sqrt((1.0 - a_prev) / (1.0 - a_curr) * (1.0 - a_curr / a_prev))
         
         c1 = torch.sqrt(a_prev / a_curr) # coefficiente per zt
         c2 = torch.sqrt(1.0 - a_prev - sigma**2) - torch.sqrt(a_prev * (1.0 - a_curr) / a_curr) # coefficiente per g
          
         eps = torch.randn_like(zt) # rumore casuale
-        
+
+        #sto moltiplicando scalari per tensri, pytorch esegue in automatico
+        #il broadcasting di questo scalare su ogni dimensione
         z_prev = c1 * zt + c2 * g + sigma * eps # calcolo z_tau_i-1
         
         return z_prev
@@ -363,7 +416,9 @@ class ConditionalDiffusion(nn.Module):
             tuple: (loss, metrics_dict) dove metrics_dict è un dizionario per il logging.
         """
         images, attributes = batch
+        # [B, 3, H, W]
         images = images.to(device)
+        # [B, 3]
         attributes = attributes.to(device)
         loss = self.compute_loss(images, attributes)
 
