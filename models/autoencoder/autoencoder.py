@@ -170,8 +170,8 @@ class Encoder(nn.Module):
             tuple: Una coppia (mu, log_var) che rappresenta la distribuzione latente.
         """
 
-        cond_expanded = cond_emb[:, :, None, None].expand(-1, -1, x.size(2), x.size(3))
-        x = torch.cat([x, cond_expanded], dim=1)
+        cond_expanded = cond_emb[:, :, None, None].expand(-1, -1, x.size(2), x.size(3)) # [B, ATTR_EMBED_DIM, H, W]
+        x = torch.cat([x, cond_expanded], dim=1) 
         x = self.encoder_net(x)
         x = torch.flatten(x, start_dim=1)
 
