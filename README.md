@@ -128,7 +128,7 @@ python generate.py --model vae --male 0 --smiling 1 --young 1 --num_samples 16 -
 python generate.py --model vae --all_combos --samples_per_combo 4 --show
 ```
 #### Diffusion Model
-1. All combinations (grid) - fast (50 DDIM steps) eta = 0.0 - 4 images per combo
+1. All combinations (grid) - fast (500 DDIM steps) eta = 0.0 - 4 images per combo
 ```bash
 python generate.py --model diff --all_combos --samples_per_combo 2 --steps 500 --eta 0.8 --show
 ```
