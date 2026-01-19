@@ -243,7 +243,7 @@ class MambaLayer(nn.Module):
 
         # ramo principale
         ex = self.proj_1(x)
-        ex = self.do_conv(ex, True) # usa il buffer per la convoluzione causale
+        ex = self.do_conv(ex, inference=True) # usa il buffer per la convoluzione causale
         ex = self.activation(ex)
         y = self.mamba.inference_step(ex) # passo del Mamba Block
         

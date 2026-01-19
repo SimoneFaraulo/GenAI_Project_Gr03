@@ -42,7 +42,7 @@ def parse_arguments():
     parser.add_argument('--young', '-Y', type=int, choices=[0, 1], help="Genera giovane (1) o no (0)")
 
     parser.add_argument('--num_samples', '-n', type=int, default=8,
-                        help="[Solo per modalità Manuale] Numero totale di immagini da generare.")
+                        help="[Solo per modalità Manuale] Numero totale di immagini da generare. Default: 8")
 
     parser.add_argument('--temperature', '-t', type=float, default=0.0,
                         help="Temperatura di campionamento (usata specificamente per Mamba). "
