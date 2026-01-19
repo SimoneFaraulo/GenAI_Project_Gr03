@@ -82,9 +82,7 @@ class Trainer:
             
             self.epoch_count += 1
 
-            save_snapshot(self.model, self.dataset, self.checkpoint_folder, 
-                          self.epoch_count, self.device)
+            save_snapshot(self.model, self.dataset, self.checkpoint_folder, self.epoch_count, self.device)
 
-        save_training_checkpoint(self.cpm, self.model, self.optimizer, 
-                                 self.epoch_count, force=True)
+        save_training_checkpoint(self.cpm, self.model, self.optimizer, self.epoch_count, force=True)
         print("Training finished.")

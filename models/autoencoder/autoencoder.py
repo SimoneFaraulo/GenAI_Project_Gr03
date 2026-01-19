@@ -170,11 +170,13 @@ class Encoder(nn.Module):
             tuple: Una coppia (mu, log_var) che rappresenta la distribuzione latente.
         """
 
-        cond_expanded = cond_emb[:, :, None, None].expand(-1, -1, x.size(2), x.size(3)) # [B, ATTR_EMBED_DIM, H, W]
-        x = torch.cat([x, cond_expanded], dim=1) 
+        # cond_emb = [B, Dim_emb] -> [B, Dim_emb, 1, 1] -> [B, Dim_emb, H, W]
+        cond_expanded = cond_emb[:, :, None, None].expand(-1, -1, x.size(2), x.size(3))
+        x = torch.cat([x, cond_expanded], dim=1)
+        # x = [B, Img_channell+Cond_emb, H, W]
         x = self.encoder_net(x)
+        # x = [B, Features, H, W] -> [B, F*H*W]
         x = torch.flatten(x, start_dim=1)
-
         return self.fc_mu(x), self.fc_var(x) # [B, latent_dim (512)]
 
 class Decoder(nn.Module):
@@ -235,12 +237,12 @@ class Decoder(nn.Module):
         Returns:
             torch.Tensor: L'immagine ricostruita (valori tra 0 e 1 tramite Sigmoid).
         """
-
+        # z = [B, Latent_dim], cond_emb = [B, emb_dim]
         z_cond = torch.cat([z, cond_emb], dim=1)
-
+        # z_cond = [B, Latent_dim + emb_dim]
         x = self.decoder_input(z_cond)
+        # x = [B, Hidden_dim_0*start_h*start_w] -> [B, Hidden_dim_0, start_h, start_w]
         x = x.view(-1, self.initial_reshape_dim, self.start_spatial_dim, self.start_spatial_dim) # [B, 8192] -> [B, 512, 4, 4]
-        
         x = self.decoder_net(x)
         x = self.final_layer(x)
         
@@ -260,6 +262,7 @@ class ConditionalVAE(nn.Module):
         """
 
         super().__init__()
+        # [B, ATTR_DIM]
         self.attr_embed = nn.Sequential(
             nn.Linear(ATTR_DIM, ATTR_EMBED_DIM), # 3 -> 128
             nn.LeakyReLU(0.2, inplace=True),

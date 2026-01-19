@@ -128,6 +128,7 @@ class VisionMambaModel(nn.Module):
 
         if cond is None:
             cond = torch.randint(0, 2, (num_samples, self.attr_dim)).float().to(device)
+            cond = (cond * 2) - 1
         else:
             cond = cond.to(device)
 

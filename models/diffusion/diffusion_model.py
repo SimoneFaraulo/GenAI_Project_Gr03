@@ -70,8 +70,8 @@ class TimeEncoding:
         # Encoding utile a distinguere efficientemente i vari passi temporali
         # Ogni angolo (t) rappresenta l'info di ogni passo t
         # la freq (mul) è utile a rappresentare in maniera completa l'info
-        # La rete tramite (t) saperà a quale passo temporale si trova e se si trova in t piccoli (vicino alla distribuzione target)
-        # si concentrerà sulle componenti ad alta frequenza per ricostruire i dettagli di z viceversa nelle fasi iniziali t grandi
+        # La rete tramite (t) saprà a quale passo temporale si trova e se si trova in t piccoli (vicino alla distribuzione target)
+        # si concentrerà sulle componenti ad alta frequenza per ricostruire i dettagli di z viceversa nelle fasi iniziali (t grandi)
         self.encoding = encoding
 
 
@@ -111,6 +111,8 @@ class UNetBlock(nn.Module):
         self.inner_features = inner_features
         self.cond_features = cond_features
         self.encoder = self.build_encoder(outer_features + cond_features, inner_features)
+        #Al decoder fornisco anche le info posizionali, sarà così in grado di dosare
+        #il rumore da rimuovere sulla base del t attuale
         self.decoder = self.build_decoder(inner_features + cond_features + TIME_ENCODING_SIZE, outer_features)
         self.combiner = self.build_combiner(2 * outer_features, outer_features)
         self.inner = inner_block
@@ -135,7 +137,7 @@ class UNetBlock(nn.Module):
         # x = [B, 3 + cond_feat, size, size]
         x = torch.cat((x, cc), dim=1)
         y = self.encoder(x)
-        #ritorna un y cond size // 2
+        #ritorna un y con size // 2
 
         if self.inner:
             # Eseguo la ricorsione passo un input al figlio del padre
@@ -214,19 +216,23 @@ class ConditionalDiffusion(nn.Module):
         self.hidden_dims = DIFFUSION_HIDDEN_DIMS
         self.noise_schedule = NoiseSchedule(device=DEVICE)
         self.time_encoding = TimeEncoding(TIME_ENCODING_SIZE, device=DEVICE)
+        #Proiezione dell'info condizionale da [B, 3] -> [B, EMBD_DIM]
         self.attr_embed = nn.Sequential(
             nn.Linear(ATTR_DIM, ATTR_EMBED_DIM),
-            nn.SiLU(),
+            nn.SiLU(), #Migliore per la retropropagazione dei gradienti, ricordiamo che alcuni elementi condizionali
+                       #sono -1 in ReLu avremmo attivazione < 0 e gradiente nullo, SiLu favorisce apprendimento di feature migliori
             nn.Linear(ATTR_EMBED_DIM, ATTR_EMBED_DIM),
         )
         self.pre = nn.Sequential(
             nn.Conv2d(self.channels, self.hidden_dims[0], 3, padding='same'), # porta a hidden_dims[0] (default 64) canali
             nn.ReLU()
         )
+        #Costruzione della rete
         self.unet = self.build_unet(self.img_size, self.hidden_dims)
         self.post = nn.Sequential(
             nn.ReLU(),
-            nn.Conv2d(self.hidden_dims[0], self.channels, 3, padding='same') # porta di nuovo a 3 canali per RGB
+            # porta di nuovo a 3 canali per RGB
+            nn.Conv2d(self.hidden_dims[0], self.channels, 3, padding='same')
             # non c'è attivazione finale non lineare per predire il rumore
         )
 
@@ -243,10 +249,14 @@ class ConditionalDiffusion(nn.Module):
         Returns:
             torch.Tensor: Il rumore predetto dalla rete.
         """
+        # t_enc = [B, DIM_T_ENC]
         t_enc = self.time_encoding[t]
+        # [B, 3] -> [B, DIM_EMB]
         cond_emb = self.attr_embed(cond)
+        # [B, 3, H, W] -> [B, H_DIM[0], H, W]
         x_in = self.pre(x)
         y = self.unet(x_in, t_enc, cond_emb)
+        # [B, H_DIM[0], H, W] -> [B, 3, H, W]
         output = self.post(y)
         return output
 
@@ -269,7 +279,7 @@ class ConditionalDiffusion(nn.Module):
             inner_block = None
 
         # se la lista è solo di due elementi ho solo un outer e inner feature
-        # sono nella bottle, neck e inizio i return creando la rete per intero
+        # sono nella bottleneck e inizio i return creando la rete per intero
         return UNetBlock(size, feat_list[0], feat_list[1], ATTR_EMBED_DIM, inner_block)
 
     def compute_loss(self, x0, cond):
@@ -291,7 +301,7 @@ class ConditionalDiffusion(nn.Module):
         cond = cond.clone()  # evita di modificare l'input originale perché usiamo il dropout sugli attributi
         u = torch.rand((batch_size,), device=x0.device)
         cond[u < P, :] = 0.0 # condizionamento nullo con probabilità P
-        #Seleziono un t randomico
+        #Seleziono un t randomico diverso per ogni B
         t = torch.randint(0, self.noise_schedule.schedule_len, (batch_size,), device=x0.device)
         # eps = [B, 3, H, W]
         eps = torch.randn_like(x0)
@@ -307,7 +317,7 @@ class ConditionalDiffusion(nn.Module):
         #di alpha su tutte quelle dim così come anche per sqrt_1_alpha
         zt = sqrt_alpha * x0 + sqrt_1_alpha * eps # diffusion kernel
         # Stimo g
-        g = self(zt, t, cond)
+        g = self(zt, t, cond) #INPUT-> [B, 3, H, W], [DIM_T_ENC], [B, 3]
         loss = nn.functional.mse_loss(g, eps)
         
         return loss
@@ -386,7 +396,7 @@ class ConditionalDiffusion(nn.Module):
             #recupero l'alpha associata al tempo t-delta
             a_prev = self.noise_schedule.alpha[tau_prev]
         else:
-            # Mi trovo in alpha_0 non definito e di default = 0
+            # Mi trovo in alpha_0 non definito e di default = 1
             a_prev = torch.tensor(1.0, device=zt.device)
 
         # calcolo esattamente sigma il rumore da aggiungere a z_t-delta generato
@@ -397,7 +407,7 @@ class ConditionalDiffusion(nn.Module):
          
         eps = torch.randn_like(zt) # rumore casuale
 
-        #sto moltiplicando scalari per tensri, pytorch esegue in automatico
+        #sto moltiplicando scalari per tensori, pytorch esegue in automatico
         #il broadcasting di questo scalare su ogni dimensione
         z_prev = c1 * zt + c2 * g + sigma * eps # calcolo z_tau_i-1
         
