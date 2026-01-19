@@ -20,7 +20,7 @@ transform = tforms.Compose([
     tforms.ToImage(),
     tforms.CenterCrop(178), 
     tforms.Resize((IMAGE_SIZE, IMAGE_SIZE), antialias=True),
-    tforms.ToDtype(torch.float32, scale=True)
+    tforms.ToDtype(torch.float32, scale=True) # normalizza a [0, 1]
 ])
 
 try:

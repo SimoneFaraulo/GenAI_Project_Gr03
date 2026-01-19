@@ -53,7 +53,7 @@ class CelebADataset(Dataset):
             parts = line.split()
             filename = parts[0]
             all_attrs = [int(x) for x in parts[1:]]
-            current_attrs = [all_attrs[idx] for idx in self.target_indices]
+            current_attrs = [all_attrs[idx] for idx in self.target_indices] # seleziona solo gli attributi target
             
             self.filenames.append(filename)
             self.labels.append(current_attrs)
