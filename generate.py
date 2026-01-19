@@ -153,6 +153,8 @@ def main():
     elif args.model == 'diff':
         print(f"Eta impostata: {args.eta}")
         print(f"Steps impostati: {args.steps}")
+        if args.steps > NOISE_SCHEDULE_L:
+            raise ValueError(f"ERRORE: steps ({args.steps}) non può essere maggiore di NOISE_SCHEDULE_L ({NOISE_SCHEDULE_L})")
 
     try:
         model, exp_name_prefix = get_model_from_env(args.model)
