@@ -14,12 +14,11 @@ import torch
 from torchvision.transforms import v2 as tforms
 from torch.utils.data import DataLoader
 
-IMAGE_SIZE = IMG_SIZE
 
 transform = tforms.Compose([
     tforms.ToImage(),
     tforms.CenterCrop(178), 
-    tforms.Resize((IMAGE_SIZE, IMAGE_SIZE), antialias=True),
+    tforms.Resize((IMG_SIZE, IMG_SIZE), antialias=True),
     tforms.ToDtype(torch.float32, scale=True) # normalizza a [0, 1]
 ])
 

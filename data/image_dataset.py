@@ -2,6 +2,7 @@ from PIL import Image
 import os
 import torch
 from torch.utils.data import Dataset
+from torchvision.transforms.v2 import functional as F
 
 
 class CelebADataset(Dataset):
@@ -13,13 +14,13 @@ class CelebADataset(Dataset):
     selezionando solo specifici target (indici 20, 31, 39).
     """
 
-    def __init__(self, folder, transform=None):
+    def __init__(self, folder, transform):
         """
         Inizializza il dataset impostando i percorsi e caricando i metadati necessari.
 
         Args:
             folder (str): Il percorso della cartella radice contenente le sottocartelle delle immagini ('img_align_celeba') e il file degli attributi.
-            transform (callable, optional): Una funzione o trasformazione torchvision da applicare all'immagine caricata (default: None).
+            transform (callable): Una funzione o trasformazione torchvision da applicare all'immagine caricata.
         """
 
         self.folder = folder
@@ -82,8 +83,10 @@ class CelebADataset(Dataset):
         img_path = os.path.join(self.img_dir, filename)
         img = Image.open(img_path).convert('RGB')
 
-        if self.transform:
-            img = self.transform(img)
+        img = self.transform(img)
+        if not isinstance(img, torch.Tensor):
+            img = F.to_image(img)
+            img = F.to_dtype(img, dtype=torch.float32, scale=True)
         attr_list = self.labels[index]
         target = torch.tensor(attr_list, dtype=torch.float32)
 
