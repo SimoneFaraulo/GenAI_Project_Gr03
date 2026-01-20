@@ -29,7 +29,7 @@ class MambaBlock(nn.Module):
         logA = torch.log(A) 
         self.logA = nn.Parameter(logA)
         
-        self.projB = nn.Linear(dim, state_size) # sB: Lienar(D,N)
+        self.projB = nn.Linear(dim, state_size) # sB: Linear(D,N)
         self.projC = nn.Linear(dim, state_size) # sC: Linear(D,N)
         self.projDelta = nn.Linear(dim, 1, bias=False) # sDelta: Linear(D,1) non (D,D) per semplicità
         biasDelta = torch.zeros(1, 1, dim)  # bias diverso per ogni D, ma condiviso da tutti gli stati N
@@ -108,7 +108,7 @@ class MambaBlock(nn.Module):
         Calcola i parametri dinamici B, C e Delta in funzione dell'input x.
 
         Args:
-            x (torch.Tensor): Input corrente.
+            x (torch.Tensor): Input corrente (B, L, N).
 
         Returns:
             tuple: Una tupla contenente i tensori (B, C, Delta).
@@ -135,6 +135,7 @@ class MambaBlock(nn.Module):
         Abar = torch.exp(DeltaA)
         DeltaB = Delta[:, :, :, None] * B[:, :, None, :] # B: (B, L, 1, N)
         denom = DeltaA + 1e-7
+        # clampiamo per evitare explosioni/divisioni per zero)
         Bbar = (Abar - 1.0) / (denom.abs().clamp(min=1e-10) * denom.sign()) * DeltaB # (Delta * A)^-1 * (Abar - I) * B
 
         return Abar, Bbar
@@ -181,7 +182,7 @@ class MambaLayer(nn.Module):
         
         # ramo principale: proiezione -> conv -> SSM
         self.proj_1 = nn.Linear(dim, edim)
-        self.conv = nn.Conv1d(edim, edim, conv_kernel, padding=conv_kernel - 1)
+        self.conv = nn.Conv1d(edim, edim, conv_kernel, padding=conv_kernel - 1) # padding per convoluzione causale
         self.mamba = MambaBlock(edim, state_size)
         
         # ramo gating

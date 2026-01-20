@@ -84,8 +84,8 @@ class VisionMambaModel(nn.Module):
         di patch vettorializzati per renderle confrontabili con l'output del modello.
 
         Args:
-            pred_patches (torch.Tensor): Tensore dei patch generati dal modello.
-            real_imgs (torch.Tensor): Immagini target originali.
+            pred_patches (torch.Tensor): Tensore dei patch generati dal modello (B, L, Pixels_Per_Patch).
+            real_imgs (torch.Tensor): Immagini target originali (B, C, H, W).
 
         Returns:
             torch.Tensor: Valore scalare della loss.
@@ -153,7 +153,7 @@ class VisionMambaModel(nn.Module):
             noise = torch.randn_like(next_patch_pred) * temperature # rumore per variabilità
             patch_input_for_next_step = next_patch_pred + noise
             
-            # (B, Pixels_Per_Patch) -> (B, C, patch_size, patch_size)
+            # (B, 1, Pixels_Per_Patch) -> (B, C, patch_size, patch_size)
             prev_patch_img = patch_input_for_next_step.view(B, self.img_channels, self.patch_size, self.patch_size)
             patch_emb = self.patch_embedding(prev_patch_img) # (B, D, 1, 1)
 
