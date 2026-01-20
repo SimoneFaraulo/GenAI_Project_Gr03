@@ -25,7 +25,6 @@ def save_training_checkpoint(cpm, model, optimizer, epoch_count, force=False, in
 def save_snapshot(model, dataset, folder, epoch_count, device, num_samples=8):
     """
     Genera e salva un confronto visivo (Originale vs Generato).
-    Adattata per gestire sia VAE (Ricostruzione) che Diffusion (Campionamento).
     """
     filename = f"snap_{epoch_count:04d}.png"
     filepath = os.path.join(folder, filename)

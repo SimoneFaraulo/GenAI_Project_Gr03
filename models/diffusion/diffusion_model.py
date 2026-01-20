@@ -265,9 +265,8 @@ class ConditionalDiffusion(nn.Module):
         Costruisce ricorsivamente l'architettura U-Net basandosi sulla lista delle dimensioni delle feature fornite.
         
         Args:
-            x (torch.Tensor): Batch di immagini rumorose [Batch, Channels, H, W].
-            t (torch.Tensor): Batch di indici temporali [Batch].
-            cond (torch.Tensor): Batch di vettori attributi (non encodati) [Batch, Attr_Dim].
+            size (int): Risoluzione spaziale (Altezza/Larghezza) del livello corrente.
+            feat_list (list[int]): Lista delle features da calcolare ad ogni livello.
 
         Returns:
             torch.Tensor: Il rumore predetto dalla rete.

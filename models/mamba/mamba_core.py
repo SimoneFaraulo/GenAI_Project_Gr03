@@ -29,7 +29,7 @@ class MambaBlock(nn.Module):
         logA = torch.log(A) 
         self.logA = nn.Parameter(logA)
         
-        self.projB = nn.Linear(dim, state_size) # sB: Lienar(D,N)
+        self.projB = nn.Linear(dim, state_size) # sB: Linear(D,N)
         self.projC = nn.Linear(dim, state_size) # sC: Linear(D,N)
         self.projDelta = nn.Linear(dim, 1, bias=False) # sDelta: Linear(D,1) non (D,D) per semplicità
         biasDelta = torch.zeros(1, 1, dim)  # bias diverso per ogni D, ma condiviso da tutti gli stati N
@@ -268,9 +268,7 @@ class MambaLayer(nn.Module):
             torch.Tensor: Risultato della convoluzione.
         """
         if inference:
-            ck = self.conv_kernel
-            ed = self.edim
-            self.cached_x = torch.cat([self.cached_x, x], dim=1)[:, 1:] # mantiene gli ultimi ck elementi
+            self.cached_x = torch.cat([self.cached_x, x], dim=1)[:, 1:]
             x = self.cached_x
         L = x.shape[1]
         x = x.permute(0, 2, 1) # (B, L, D) -> (B, D, L), D sono i canali
