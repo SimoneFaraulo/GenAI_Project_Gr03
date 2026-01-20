@@ -269,9 +269,7 @@ class MambaLayer(nn.Module):
             torch.Tensor: Risultato della convoluzione.
         """
         if inference:
-            ck = self.conv_kernel
-            ed = self.edim
-            self.cached_x = torch.cat([self.cached_x, x], dim=1)[:, 1:] # mantiene gli ultimi ck elementi
+            self.cached_x = torch.cat([self.cached_x, x], dim=1)[:, 1:]
             x = self.cached_x
         L = x.shape[1]
         x = x.permute(0, 2, 1) # (B, L, D) -> (B, D, L), D sono i canali
