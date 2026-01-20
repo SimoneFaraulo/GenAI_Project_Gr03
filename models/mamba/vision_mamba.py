@@ -138,7 +138,7 @@ class VisionMambaModel(nn.Module):
             layer.inference_start(batch_size=B)
 
         c_emb = self.attr_embedding(cond).unsqueeze(1) # (B, ATTR_EMB) -> (B, D) -> (B, 1, D)
-        curr_input = c_emb + self.pos_embedding[:, 0:1, :]
+        curr_input = c_emb + self.pos_embedding[:, 0:1, :] # embedding posizionale per il token di condizione
 
         for layer in self.layers:
             curr_input = layer.inference_step(curr_input)
